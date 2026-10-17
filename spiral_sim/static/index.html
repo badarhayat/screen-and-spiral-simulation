@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spiral concentrator</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%238d3f1c'/%3E%3Cpath d='M8 24c3-7 6-11 8-11s5 4 8 11' fill='none' stroke='%23fffdf8' stroke-width='2'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --ink: #1e1a15;
+      --muted: #5e564c;
+      --line: #e3d9c9;
+      --card: #fffdf8;
+      --accent: #8d3f1c;
+      --accent-dark: #6d2e12;
+      --soft: #f7f1e6;
+      --good: #1d6a43;
+      --warn: #8a5a10;
+      --warn-bg: #fff6e4;
+      --bad: #8d2c2c;
+      --bad-bg: #fdecec;
+      --shadow: 0 12px 30px rgba(60, 40, 20, 0.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.5 "Segoe UI", "Helvetica Neue", sans-serif;
+    }
+    header, main { width: min(980px, calc(100% - 32px)); margin: 0 auto; }
+    header { padding: 32px 0 8px; }
+    .kicker {
+      margin: 0;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    h1 { font-family: Georgia, "Iowan Old Style", serif; font-size: 40px; line-height: 1.1; margin: 6px 0; font-weight: 600; }
+    .lede { margin: 0; max-width: 68ch; color: var(--muted); }
+    nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0; }
+    nav button {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 4px 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+    nav button.current { background: var(--ink); color: white; border-color: var(--ink); }
+    nav button:disabled { opacity: 0.45; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      margin-bottom: 22px;
+    }
+    h2 { font-family: Georgia, serif; font-size: 28px; margin: 0 0 8px; font-weight: 600; }
+    h3 { margin: 22px 0 8px; font-size: 18px; }
+    p { margin: 0 0 12px; }
+    .muted { color: var(--muted); }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+    button, .file-button {
+      font: inherit;
+      border-radius: 10px;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: white;
+      padding: 10px 16px;
+      cursor: pointer;
+    }
+    button.secondary, .file-button { background: transparent; color: var(--accent-dark); }
+    button.ghost { background: transparent; color: var(--muted); border-color: var(--line); padding: 8px 12px; }
+    button:disabled { opacity: 0.6; cursor: wait; }
+    .choice-grid { display: grid; gap: 10px; }
+    .choice {
+      text-align: left;
+      background: var(--soft);
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+    .choice strong { display: block; }
+    .entry { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 10px; }
+    .entry.minerals { grid-template-columns: 1.4fr 1fr auto; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+    input, select {
+      font: inherit;
+      color: var(--ink);
+      background: white;
+      border: 1px solid #d9d0c2;
+      border-radius: 8px;
+      padding: 8px 10px;
+      width: 100%;
+    }
+    .stack { display: grid; gap: 12px; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .banner { border-radius: 12px; padding: 12px 14px; margin: 0 0 14px; }
+    .banner.warn { background: var(--warn-bg); color: #5c3d09; }
+    .banner.bad { background: var(--bad-bg); color: var(--bad); }
+    .banner.good { background: #e8f6ee; color: var(--good); }
+    .yields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 12px 0 18px; }
+    .yield { background: var(--soft); border-radius: 14px; padding: 12px 14px; }
+    .yield p { margin: 0; color: var(--muted); font-size: 13px; }
+    .yield strong { display: block; font-size: 28px; font-variant-numeric: tabular-nums; }
+    .yield small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.3; }
+    .table-wrap { overflow-x: auto; margin: 8px 0 16px; }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .params { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin: 8px 0 12px; }
+    .params div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 4px 0; }
+    .params span { color: var(--muted); }
+    .note { color: var(--muted); font-size: 14px; }
+    @media (max-width: 720px) {
+      h1 { font-size: 32px; }
+      .entry, .entry.minerals, .two, .params { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="kicker">Mineral processing</p>
+    <h1>Spiral concentrator</h1>
+    <p class="lede">A size-density partition model after R.P. King, Chapter 7. The same equations work for any minerals you enter. Questions come one step at a time.</p>
+  </header>
+  <main>
+    <nav id="nav" aria-label="Steps"></nav>
+    <section id="screen" class="card"></section>
+  </main>
+  <script>
+    const state = blankState();
+    let step = "welcome";
+    let result = null;
+    let changeNote = "";
+    let busy = false;
+
+    const steps = [
+      ["welcome", "Start"],
+      ["sizes", "Sizes"],
+      ["minerals", "Minerals"],
+      ["grades", "Grades"],
+      ["circuit", "Circuit"],
+      ["data", "Plant data"],
+      ["plant", "Survey"],
+      ["splitters", "Splitters"],
+      ["results", "Results"]
+    ];
+
+    function blankState() {
+      return {
+        sizes: [{ d_low: "", d_high: "", mass_percent: "" }],
+        minerals: [{ name: "", density: "" }, { name: "", density: "" }],
+        compositionMode: "overall",
+        overall: {},
+        bySize: [],
+        feedRate: "",
+        solids: "",
+        nProducts: 3,
+        dense: true,
+        calibrate: false,
+        yields: {},
+        grades: {},
+        recoveries: {},
+        wantRecoveries: false,
+        surveyOuter: "50",
+        surveyInner: "50",
+        preset: "density",
+        openingMode: "mid",
+        outer: "50",
+        inner: "50",
+        targetConc: "",
+        targetMidd: "",
+        notice: ""
+      };
+    }
+
+    function esc(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+    function fmt(value) {
+      if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+      return Number(value).toFixed(2);
+    }
+
+    function draw() {
+      document.getElementById("nav").innerHTML = steps.map(([id, label]) => {
+        const hidden = id === "plant" && !state.calibrate;
+        if (hidden) return "";
+        const current = id === step;
+        return `<button type="button" class="${current ? "current" : ""}" disabled>${esc(label)}</button>`;
+      }).join("");
+      const screen = document.getElementById("screen");
+      screen.innerHTML = screens[step]();
+      bind();
+      window.scrollTo(0, 0);
+    }
+
+    function noticeHtml() {
+      if (!state.notice) return "";
+      const html = `<div class="banner warn">${esc(state.notice)}</div>`;
+      state.notice = "";
+      return html;
+    }
+
+    function errorHtml(message) {
+      return `<div class="banner bad">${esc(message)}</div>`;
+    }
+
+    const screens = {
+      welcome() {
+        return `
+          <h2>How do you want to start?</h2>
+          <p class="muted">Feed first, then an optional plant survey. With no survey, the cuts are placed between your lightest and heaviest minerals and the results are marked as approximate.</p>
+          <div class="choice-grid">
+            <button class="choice" type="button" data-go="new"><strong>Start a new simulation</strong><span>Enter size classes, minerals, and grades one step at a time.</span></button>
+            <button class="choice" type="button" data-action="example"><strong>Open the heavy-mineral sands example</strong><span>Quartz, rutile, and zircon. No plant survey, so the cuts are the starting values.</span></button>
+            <button class="choice" type="button" data-action="starter"><strong>Fill a quartz and ilmenite starter</strong><span>A short feed you can edit before running.</span></button>
+          </div>
+          <div class="actions">
+            <label class="file-button">Load a saved session<input id="file" type="file" accept="application/json,.json" hidden></label>
+          </div>
+          <p id="error"></p>`;
+      },
+      sizes() {
+        const rows = state.sizes.map((row, index) => `
+          <div class="entry" data-size>
+            <label>Lower size, mm<input name="low" value="${esc(row.d_low)}" inputmode="decimal"></label>
+            <label>Upper size, mm<input name="high" value="${esc(row.d_high)}" inputmode="decimal"></label>
+            <label>Mass percent<input name="mass" value="${esc(row.mass_percent)}" inputmode="decimal"></label>
+            <button class="ghost" type="button" data-remove="${index}">Remove</button>
+          </div>`).join("");
+        return `
+          ${noticeHtml()}
+          <h2>Feed size distribution</h2>
+          <p class="muted">Use 0 as the lower size for the finest class. Mass percents should add up to 100. If they are close, they will be scaled.</p>
+          ${rows}
+          <button class="secondary" type="button" id="add-size">Add a size class</button>
+          <div class="actions">
+            <button class="secondary" type="button" data-back="welcome">Back</button>
+            <button type="button" id="next">Continue</button>
+          </div>
+          <p id="error"></p>`;
+      },
+      minerals() {
+        const rows = state.minerals.map((row, index) => `
+          <div class="entry minerals" data-mineral>
+            <label>Name<input name="name" value="${esc(row.name)}"></label>
+            <label>Density, g/cm3<input name="density" value="${esc(row.density)}" inputmode="decimal"></label>
+            <button class="ghost" type="button" data-remove="${index}">Remove</button>
+          </div>`).join("");
+        return `
+          <h2>Minerals</h2>
+          <p class="muted">Use one row for a group if you assay it as a group. Density is the same number as specific gravity.</p>
+          ${rows}
+          <button class="secondary" type="button" id="add-mineral">Add a mineral</button>
+          <div class="actions">
+            <button class="secondary" type="button" data-back="sizes">Back</button>
+            <button type="button" id="next">Continue</button>
+          </div>
+          <p id="error"></p>`;
+      },
+      grades() {
+        if (state.minerals.length === 1) {
+          return `
+            <h2>Grades</h2>
+            <p>Only ${esc(state.minerals[0].name)} is in the feed, so every size class is 100% ${esc(state.minerals[0].name)}.</p>
+            <div class="actions">
+              <button class="secondary" type="button" data-back="minerals">Back</button>
+              <button type="button" id="next">Continue</button>
+            </div>`;
+        }
+        const mode = state.compositionMode;
+        let fields = "";
+        if (mode === "overall") {
+          fields = state.minerals.map((mineral, index) => {
+            const last = index === state.minerals.length - 1;
+            return `<label>${esc(mineral.name)}, mass percent<input data-overall="${esc(mineral.name)}" value="${esc(state.overall[mineral.name] || "")}" placeholder="${last ? "Blank uses the remainder" : ""}" inputmode="decimal"></label>`;
+          }).join("");
+        } else {
+          fields = state.sizes.map((size, index) => {
+            const title = `${size.d_low || "?"}–${size.d_high || "?"} mm`;
+            const inputs = state.minerals.map((mineral) => {
+              const current = (state.bySize[index] || {})[mineral.name] || "";
+              return `<label>${esc(mineral.name)}<input data-size-grade="${index}" data-mineral-name="${esc(mineral.name)}" value="${esc(current)}" inputmode="decimal"></label>`;
+            }).join("");
+            return `<h3>${esc(title)}</h3><div class="two">${inputs}</div>`;
+          }).join("");
+        }
+        return `
+          <h2>Mineral grades</h2>
+          <div class="two">
+            <label>How are the grades reported?
+              <select id="mode">
+                <option value="overall" ${mode === "overall" ? "selected" : ""}>Overall grades, same in every size</option>
+                <option value="by_size" ${mode === "by_size" ? "selected" : ""}>A separate analysis for each size</option>
+              </select>
+            </label>
+          </div>
+          <div class="stack" style="margin-top:12px">${fields}</div>
+          <div class="actions">
+            <button class="secondary" type="button" data-back="minerals">Back</button>
+            <button type="button" id="next">Continue</button>
+          </div>
+          <p id="error"></p>`;
+      },
+      circuit() {
+        return `
+          <h2>Products and pulp</h2>
+          <div class="stack">
+            <label>Which product is dense?
+              <select id="dense">
+                <option value="yes" ${state.dense ? "selected" : ""}>Concentrate is dense. Usual for heavy minerals and metals.</option>
+                <option value="no" ${state.dense ? "" : "selected"}>Concentrate is light. Usual for coal.</option>
+              </select>
+            </label>
+            <label>How many products?
+              <select id="products">
+                <option value="3" ${state.nProducts === 3 ? "selected" : ""}>Three: concentrate, middlings, and tails</option>
+                <option value="2" ${state.nProducts === 2 ? "selected" : ""}>Two: concentrate and tails</option>
+              </select>
+            </label>
+            <div class="two">
+              <label>Feed solids, t/h (optional)<input id="rate" value="${esc(state.feedRate)}" inputmode="decimal"></label>
+              <label>Percent solids (blank assumes 30%)<input id="solids" value="${esc(state.solids)}" inputmode="decimal"></label>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="secondary" type="button" data-back="grades">Back</button>
+            <button type="button" id="next">Continue</button>
+          </div>
+          <p id="error"></p>`;
+      },
+      data() {
+        return `
+          <h2>Do you have plant data?</h2>
+          <p class="muted">A survey of yields and grades lets the model fit the cut densities, sharpness, and bypass. Without one, the run uses starting values and says the results are approximate.</p>
+          <div class="choice-grid">
+            <button class="choice" type="button" data-calibrate="yes"><strong>Yes, calibrate to my survey</strong><span>Enter the numbers you have. Leave the rest blank.</span></button>
+            <button class="choice" type="button" data-calibrate="no"><strong>No plant data</strong><span>Place the cuts from the mineral densities and continue.</span></button>
+          </div>
+          <div class="actions">
+            <button class="secondary" type="button" data-back="circuit">Back</button>
+          </div>`;
+      },
+      plant() {
+        const products = productKeys();
+        const yields = products.map((product) => `
+          <label>${esc(productLabel(product))} yield, % of feed
+            <input data-yield="${product}" value="${esc(state.yields[product] || "")}" inputmode="decimal">
+          </label>`).join("");
+        const grades = products.map((product) => `
+          <h3>${esc(productLabel(product))} grades, mass percent</h3>
+          <div class="two">${state.minerals.map((mineral) => `
+            <label>${esc(mineral.name)}
+              <input data-grade-product="${product}" data-grade-mineral="${esc(mineral.name)}" value="${esc((state.grades[product] || {})[mineral.name] || "")}" inputmode="decimal">
+            </label>`).join("")}</div>`).join("");
+        const recoveries = state.wantRecoveries ? products.map((product) => `
+          <h3>Recovery to ${esc(productLabel(product))}, %</h3>
+          <div class="two">${state.minerals.map((mineral) => `
+            <label>${esc(mineral.name)}
+              <input data-rec-product="${product}" data-rec-mineral="${esc(mineral.name)}" value="${esc((state.recoveries[product] || {})[mineral.name] || "")}" inputmode="decimal">
+            </label>`).join("")}</div>`).join("") : "";
+        return `
+          <h2>Plant survey</h2>
+          <p class="muted">Press on through any number you do not have. One missing yield can be filled from the others.</p>
+          <h3>Mass yields</h3>
+          <div class="two">${yields}</div>
+          ${grades}
+          <label style="margin-top:12px"><input id="want-rec" type="checkbox" ${state.wantRecoveries ? "checked" : ""}> I also have mineral recoveries</label>
+          ${recoveries}
+          <h3>Splitter openings during the survey</h3>
+          <p class="muted">50 is a mid setting. Cut densities are stored at opening 50, and the fit accounts for the position you enter here.</p>
+          <div class="two">
+            <label>Outer opening<input id="survey-outer" value="${esc(state.surveyOuter)}" inputmode="decimal"></label>
+            ${state.nProducts === 3 ? `<label>Inner opening<input id="survey-inner" value="${esc(state.surveyInner)}" inputmode="decimal"></label>` : ""}
+          </div>
+          <div class="actions">
+            <button class="secondary" type="button" data-back="data">Back</button>
+            <button type="button" id="next">Continue</button>
+          </div>
+          <p id="error"></p>`;
+      },
+      splitters() {
+        const help = openingHelp();
+        return `
+          ${noticeHtml()}
+          <h2>Set the splitters</h2>
+          <p class="muted">${esc(help)}</p>
+          <div class="stack">
+            ${state.calibrate ? `<p class="muted">The survey will set the cut densities. Choose the splitter position for this run.</p>` : `
+            <label>Starting cuts
+              <select id="preset">
+                <option value="density" ${state.preset === "density" ? "selected" : ""}>Place cuts between my lightest and heaviest minerals</option>
+                <option value="heavy-mineral" ${state.preset === "heavy-mineral" ? "selected" : ""}>Heavy-mineral textbook cuts, 3.20 and 3.95 g/cm3</option>
+              </select>
+            </label>`}
+            <label>How should this run be set?
+              <select id="opening-mode">
+                <option value="mid" ${state.openingMode === "mid" ? "selected" : ""}>${state.calibrate ? "Keep the survey splitter position" : "Mid position, opening 50"}</option>
+                <option value="openings" ${state.openingMode === "openings" ? "selected" : ""}>I will enter openings</option>
+                <option value="targets" ${state.openingMode === "targets" ? "selected" : ""}>Match a concentrate mass yield</option>
+              </select>
+            </label>
+            <div class="two" id="opening-fields" ${state.openingMode === "openings" ? "" : "hidden"}>
+              <label>Outer opening<input id="outer" value="${esc(state.outer)}" inputmode="decimal"></label>
+              ${state.nProducts === 3 ? `<label>Inner opening<input id="inner" value="${esc(state.inner)}" inputmode="decimal"></label>` : ""}
+            </div>
+            <div class="two" id="target-fields" ${state.openingMode === "targets" ? "" : "hidden"}>
+              <label>Concentrate yield, %<input id="target-conc" value="${esc(state.targetConc)}" inputmode="decimal"></label>
+              ${state.nProducts === 3 ? `<label>Middlings yield, %<input id="target-midd" value="${esc(state.targetMidd)}" inputmode="decimal"></label>` : ""}
+            </div>
+          </div>
+          <div class="actions">
+            <button class="secondary" type="button" data-back="${state.calibrate ? "plant" : "data"}">Back</button>
+            <button type="button" id="run">Run simulation</button>
+          </div>
+          <p id="error"></p>`;
+      },
+      results() {
+        if (!result) return `<h2>No result yet</h2>`;
+        const products = result.products;
+        const headers = ["Item", "Feed", ...products.map((p) => p.label)];
+        const yieldRow = ["Mass yield %", "100.00", ...products.map((p) => fmt(result.yields[p.key]))];
+        const rows = [yieldRow];
+        if (result.rates_tph) {
+          rows.push(["Solids t/h", fmt(result.rates_tph.feed), ...products.map((p) => fmt(result.rates_tph[p.key]))]);
+        }
+        const gradeRows = result.minerals.map((mineral) => [
+          mineral.name, fmt(mineral.feed_grade), ...products.map((p) => fmt(mineral.grades[p.key]))
+        ]);
+        const recoveryRows = result.minerals.map((mineral) => [
+          mineral.name, mineral.feed_grade > 0 ? "100.00" : "n/a", ...products.map((p) => fmt(mineral.recoveries[p.key]))
+        ]);
+        const sizeRows = result.sizes.map((size) => [
+          size.label, fmt(size.feed), ...products.map((p) => fmt(size.distribution[p.key]))
+        ]);
+        const destRows = result.sizes.map((size) => [
+          size.label, ...products.map((p) => fmt(size.destination[p.key]))
+        ]);
+        const balanceRows = result.minerals.map((mineral) => {
+          const produced = products.reduce((sum, p) => sum + (mineral.balance[p.key] || 0), 0);
+          return [mineral.name, fmt(mineral.balance.feed), ...products.map((p) => fmt(mineral.balance[p.key])), fmt(produced)];
+        });
+        const totalProduced = products.reduce((sum, p) => sum + (result.balance_total[p.key] || 0), 0);
+        balanceRows.push(["TOTAL", "100.00", ...products.map((p) => fmt(result.balance_total[p.key])), fmt(totalProduced)]);
+        const fitted = result.parameter_source === "fitted";
+        const bannerClass = fitted ? "good" : "warn";
+        const params = result.parameters;
+        const three = result.n_products === 3;
+        const profileHeaders = ["Size class", "Rep. mm", "Cut outer", "Ep outer"];
+        if (three) profileHeaders.push("Cut inner", "Ep inner");
+        profileHeaders.push("Bypass out %");
+        const profileRows = result.profiles.map((profile) => {
+          const row = [profile.label, fmt(profile.size_mm), fmt(profile.rho50_outer), fmt(profile.ep_outer)];
+          if (three) row.push(fmt(profile.rho50_inner), fmt(profile.ep_inner));
+          row.push(fmt(profile.bypass_outer));
+          return row;
+        });
+        const comparisons = (result.fit_comparisons || []).length
+          ? `<h3>Survey versus this fit</h3>${table(["Measurement", "Observed %", "Fitted %", "Gap"], result.fit_comparisons.map((row) => [row.label, fmt(row.observed), fmt(row.predicted), row.gap === null ? "n/a" : (row.gap > 0 ? "+" : "") + fmt(row.gap)]))}`
+          : "";
+        const warnings = (result.warnings || []).map((item) => `<div class="banner warn">${esc(item)}</div>`).join("");
+        return `
+          <div class="banner ${bannerClass}">${esc(result.source_summary)}</div>
+          ${result.source_note ? `<p>${esc(result.source_note)}</p>` : ""}
+          ${result.fit_message ? `<p>${esc(result.fit_message)}</p>` : ""}
+          ${warnings}
+          <h2>Results</h2>
+          ${changeNote ? `<div class="banner good">${esc(changeNote)}</div>` : ""}
+          <div class="yields">${products.map((p) => `<article class="yield"><p>${esc(p.label)}</p><strong>${fmt(result.yields[p.key])}%</strong><small>${esc(yieldHint(p.key, three, result.dense_is_concentrate))}</small></article>`).join("")}</div>
+          <h3>Mass yield</h3>
+          ${table(headers, rows)}
+          <h3>Grade of each mineral, mass %</h3>
+          ${table(headers, gradeRows)}
+          <h3>Recovery of each mineral, %</h3>
+          ${table(headers, recoveryRows)}
+          <h3>Size distribution of each product, mass % of that product</h3>
+          <p class="note">Each column sums to 100.</p>
+          ${table(headers, sizeRows)}
+          <h3>Where each size class reports, % of that class</h3>
+          ${table(["Size class", ...products.map((p) => p.label)], destRows)}
+          <h3>Mineral balance, mass per 100 mass units of feed</h3>
+          ${table(["Mineral", "Feed", ...products.map((p) => p.label), "Sum"], balanceRows)}
+          <p class="note">${result.closure < 1e-6 ? "Balance closure: closed." : "Balance gap: " + result.closure}</p>
+          <h3>Partition parameters used</h3>
+          <div class="params">
+            <div><span>Curve</span><strong>${esc(params.curve_label)}</strong></div>
+            <div><span>Reference size</span><strong>${fmt(params.d_ref)} mm</strong></div>
+            <div><span>Outer opening</span><strong>${fmt(result.splitters.outer_opening)}</strong></div>
+            <div><span>Outer cut at opening 50</span><strong>${fmt(params.rho50_outer_ref)} g/cm3</strong></div>
+            ${three ? `<div><span>Inner opening</span><strong>${fmt(result.splitters.inner_opening)}</strong></div><div><span>Inner cut at opening 50</span><strong>${fmt(params.rho50_inner_ref)} g/cm3</strong></div>` : ""}
+            <div><span>Imperfection I*</span><strong>${fmt(params.imperfection_ref)}</strong></div>
+            <div><span>Size exponent n</span><strong>${fmt(params.n_cut)}</strong></div>
+            <div><span>Coarse bypass</span><strong>${fmt(params.bypass_outer_coarse)}%</strong></div>
+            <div><span>Fine bypass amplitude</span><strong>${fmt(params.bypass_outer_slime)}%</strong></div>
+          </div>
+          ${table(profileHeaders, profileRows)}
+          ${comparisons}
+          <h3>Change the splitters or the cuts and run again</h3>
+          <p class="muted">This keeps the feed. You do not need to start over. ${esc(adjustHelp(three, result.dense_is_concentrate))}</p>
+          <div class="two">
+            <label>Outer opening<input id="adj-outer" value="${esc(result.splitters.outer_opening)}" inputmode="decimal"></label>
+            ${three ? `<label>Inner opening<input id="adj-inner" value="${esc(result.splitters.inner_opening)}" inputmode="decimal"></label>` : ""}
+            <label>Outer cut density, g/cm3<input id="adj-outer-cut" value="${esc(params.rho50_outer_ref)}" inputmode="decimal"></label>
+            ${three ? `<label>Inner cut density, g/cm3<input id="adj-inner-cut" value="${esc(params.rho50_inner_ref)}" inputmode="decimal"></label>` : ""}
+            <label>Imperfection I*<input id="adj-i" value="${esc(params.imperfection_ref)}" inputmode="decimal"></label>
+            <label>Curve
+              <select id="adj-curve">
+                <option value="erf" ${params.curve === "erf" ? "selected" : ""}>Error function</option>
+                <option value="logistic" ${params.curve === "logistic" ? "selected" : ""}>Logistic sigmoid</option>
+              </select>
+            </label>
+            <label>Target concentrate yield, %<input id="adj-conc" placeholder="Optional" inputmode="decimal"></label>
+            ${three ? `<label>Target middlings yield, %<input id="adj-midd" placeholder="Optional" inputmode="decimal"></label>` : ""}
+          </div>
+          <div class="actions">
+            <button type="button" id="rerun">Run again</button>
+            <button class="secondary" type="button" id="download">Download session</button>
+            <button class="ghost" type="button" id="restart">Start over</button>
+          </div>
+          <p id="error"></p>
+          <p class="note">${esc(result.calibration_note)}</p>`;
+      }
+    };
+
+    function table(headers, rows) {
+      return `<div class="table-wrap"><table><thead><tr>${headers.map((cell) => `<th>${esc(cell)}</th>`).join("")}</tr></thead><tbody>${
+        rows.map((row) => `<tr>${row.map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`).join("")
+      }</tbody></table></div>`;
+    }
+
+    function productKeys() {
+      return state.nProducts === 2 ? ["concentrate", "tails"] : ["concentrate", "middlings", "tails"];
+    }
+
+    function productLabel(key) {
+      return { concentrate: "Concentrate", middlings: "Middlings", tails: "Tails" }[key];
+    }
+
+    function openingHelp() {
+      const three = state.nProducts === 3;
+      if (!state.dense) {
+        return three
+          ? "On a light-concentrate spiral, a wider outer opening lowers the cut and the concentrate yield falls. The inner opening moves mass between middlings and tails. Opening 50 keeps the reference cut densities."
+          : "On a light-concentrate spiral, a wider opening lets more dense material move inward to the tails, so concentrate yield falls. Opening 50 keeps the reference cut density.";
+      }
+      return three
+        ? "A wider opening lowers the cut density. The inner opening sets the concentrate yield. The outer opening moves mass between middlings and tails, so changing only the outer opening leaves the concentrate yield where it is. Opening 50 keeps the reference cut densities."
+        : "A wider opening lowers the cut density and sends more material to concentrate. Opening 0 is tight. Opening 100 is wide. Opening 50 keeps the reference cut density.";
+    }
+
+    function adjustHelp(three, dense) {
+      if (!three) return "This circuit has one splitter, so the opening changes both products.";
+      if (dense) {
+        return "The outer opening moves middlings and tails. Concentrate yield changes when you move the inner opening, the inner cut, or a target yield.";
+      }
+      return "On this light-concentrate circuit the outer opening changes the concentrate yield. The inner opening moves middlings and tails.";
+    }
+
+    function yieldHint(key, three, dense) {
+      if (!three) return "Moves with the opening";
+      if (dense) {
+        if (key === "concentrate") return "Moves with the inner opening";
+        if (key === "tails") return "Moves with the outer opening";
+        return "Moves when either opening changes";
+      }
+      if (key === "concentrate") return "Moves with the outer opening";
+      if (key === "tails") return "Moves with the inner opening";
+      return "Moves when either opening changes";
+    }
+
+    function yieldChangeNote(before, after) {
+      const parts = after.products.map((product) => {
+        const oldValue = before.yields[product.key];
+        const newValue = after.yields[product.key];
+        if (Math.abs(oldValue - newValue) < 0.005) return `${product.label} stayed at ${fmt(newValue)}%`;
+        return `${product.label} moved from ${fmt(oldValue)}% to ${fmt(newValue)}%`;
+      });
+      return parts.join(". ") + ".";
+    }
+
+    function bind() {
+      document.querySelectorAll("[data-go]").forEach((node) => node.addEventListener("click", () => go(node.dataset.go === "new" ? "sizes" : node.dataset.go)));
+      document.querySelectorAll("[data-back]").forEach((node) => node.addEventListener("click", () => {
+        capture();
+        go(node.dataset.back);
+      }));
+      const addSize = document.getElementById("add-size");
+      if (addSize) addSize.addEventListener("click", () => { capture(); state.sizes.push({ d_low: "", d_high: "", mass_percent: "" }); draw(); });
+      const addMineral = document.getElementById("add-mineral");
+      if (addMineral) addMineral.addEventListener("click", () => { capture(); state.minerals.push({ name: "", density: "" }); draw(); });
+      document.querySelectorAll("[data-remove]").forEach((node) => node.addEventListener("click", () => {
+        capture();
+        const index = Number(node.dataset.remove);
+        if (step === "sizes" && state.sizes.length > 1) state.sizes.splice(index, 1);
+        if (step === "minerals" && state.minerals.length > 1) state.minerals.splice(index, 1);
+        draw();
+      }));
+      const mode = document.getElementById("mode");
+      if (mode) mode.addEventListener("change", () => { capture(); state.compositionMode = mode.value; draw(); });
+      const openingMode = document.getElementById("opening-mode");
+      if (openingMode) openingMode.addEventListener("change", () => { capture(); draw(); });
+      const wantRec = document.getElementById("want-rec");
+      if (wantRec) wantRec.addEventListener("change", () => { capture(); state.wantRecoveries = wantRec.checked; draw(); });
+      document.querySelectorAll("[data-calibrate]").forEach((node) => node.addEventListener("click", () => {
+        state.calibrate = node.dataset.calibrate === "yes";
+        go(state.calibrate ? "plant" : "splitters");
+      }));
+      document.querySelectorAll("[data-action]").forEach((node) => node.addEventListener("click", () => {
+        if (node.dataset.action === "example") loadExample();
+        if (node.dataset.action === "starter") fillStarter();
+      }));
+      const file = document.getElementById("file");
+      if (file) file.addEventListener("change", () => loadFile(file.files[0]));
+      const next = document.getElementById("next");
+      if (next) next.addEventListener("click", onNext);
+      const run = document.getElementById("run");
+      if (run) run.addEventListener("click", onRun);
+      const rerun = document.getElementById("rerun");
+      if (rerun) rerun.addEventListener("click", onRerun);
+      const download = document.getElementById("download");
+      if (download) download.addEventListener("click", downloadSession);
+      const restart = document.getElementById("restart");
+      if (restart) restart.addEventListener("click", () => { Object.assign(state, blankState()); result = null; changeNote = ""; go("welcome"); });
+    }
+
+    function capture() {
+      if (step === "sizes") {
+        state.sizes = [...document.querySelectorAll("[data-size]")].map((row) => ({
+          d_low: row.querySelector("[name=low]").value.trim(),
+          d_high: row.querySelector("[name=high]").value.trim(),
+          mass_percent: row.querySelector("[name=mass]").value.trim()
+        }));
+      }
+      if (step === "minerals") {
+        state.minerals = [...document.querySelectorAll("[data-mineral]")].map((row) => ({
+          name: row.querySelector("[name=name]").value.trim(),
+          density: row.querySelector("[name=density]").value.trim()
+        }));
+      }
+      if (step === "grades" && state.minerals.length > 1) {
+        const mode = document.getElementById("mode");
+        if (mode) state.compositionMode = mode.value;
+        state.overall = {};
+        document.querySelectorAll("[data-overall]").forEach((input) => { state.overall[input.dataset.overall] = input.value.trim(); });
+        state.bySize = state.sizes.map(() => ({}));
+        document.querySelectorAll("[data-size-grade]").forEach((input) => {
+          state.bySize[Number(input.dataset.sizeGrade)][input.dataset.mineralName] = input.value.trim();
+        });
+      }
+      if (step === "circuit") {
+        state.dense = document.getElementById("dense").value === "yes";
+        state.nProducts = Number(document.getElementById("products").value);
+        state.feedRate = document.getElementById("rate").value.trim();
+        state.solids = document.getElementById("solids").value.trim();
+      }
+      if (step === "plant") {
+        state.yields = {};
+        document.querySelectorAll("[data-yield]").forEach((input) => { state.yields[input.dataset.yield] = input.value.trim(); });
+        state.grades = {};
+        document.querySelectorAll("[data-grade-product]").forEach((input) => {
+          const product = input.dataset.gradeProduct;
+          state.grades[product] = state.grades[product] || {};
+          state.grades[product][input.dataset.gradeMineral] = input.value.trim();
+        });
+        state.recoveries = {};
+        document.querySelectorAll("[data-rec-product]").forEach((input) => {
+          const product = input.dataset.recProduct;
+          state.recoveries[product] = state.recoveries[product] || {};
+          state.recoveries[product][input.dataset.recMineral] = input.value.trim();
+        });
+        const want = document.getElementById("want-rec");
+        if (want) state.wantRecoveries = want.checked;
+        state.surveyOuter = document.getElementById("survey-outer").value.trim();
+        const inner = document.getElementById("survey-inner");
+        if (inner) state.surveyInner = inner.value.trim();
+      }
+      if (step === "splitters") {
+        const preset = document.getElementById("preset");
+        const mode = document.getElementById("opening-mode");
+        if (preset) state.preset = preset.value;
+        if (mode) state.openingMode = mode.value;
+        const outer = document.getElementById("outer");
+        const inner = document.getElementById("inner");
+        const conc = document.getElementById("target-conc");
+        const midd = document.getElementById("target-midd");
+        if (outer) state.outer = outer.value.trim();
+        if (inner) state.inner = inner.value.trim();
+        if (conc) state.targetConc = conc.value.trim();
+        if (midd) state.targetMidd = midd.value.trim();
+      }
+    }
+
+    function showError(message) {
+      const node = document.getElementById("error");
+      if (node) node.innerHTML = errorHtml(message);
+    }
+
+    function onNext() {
+      capture();
+      try {
+        if (step === "sizes") validateSizes();
+        if (step === "minerals") validateMinerals();
+        if (step === "grades") validateGrades();
+        if (step === "circuit") validateCircuit();
+        if (step === "plant") validatePlant();
+      } catch (error) {
+        showError(error.message);
+        return;
+      }
+      const order = ["sizes", "minerals", "grades", "circuit", "data", "plant", "splitters"];
+      const index = order.indexOf(step);
+      go(order[index + 1]);
+    }
+
+    function validateSizes() {
+      if (!state.sizes.length) throw new Error("Add at least one size class.");
+      let total = 0;
+      state.sizes.forEach((row, index) => {
+        const low = Number(row.d_low);
+        const high = Number(row.d_high);
+        const mass = Number(row.mass_percent);
+        if (row.d_low === "" || row.d_high === "" || row.mass_percent === "" || Number.isNaN(low) || Number.isNaN(high) || Number.isNaN(mass)) {
+          throw new Error(`Fill in every box for size class ${index + 1}.`);
+        }
+        if (high <= low) throw new Error(`Size class ${index + 1}: the upper size needs to be larger than the lower size.`);
+        if (mass < 0 || mass > 100) throw new Error(`Size class ${index + 1}: mass percent needs to be from 0 to 100.`);
+        total += mass;
+      });
+      if (total <= 0) throw new Error("The mass percents add up to zero.");
+      if (Math.abs(total - 100) > 0.5) {
+        state.sizes = state.sizes.map((row) => ({ ...row, mass_percent: String(Math.round(10000 * Number(row.mass_percent) / total) / 100) }));
+        state.notice = `Those mass percents added up to ${total.toFixed(2)}%, so they were scaled to 100%.`;
+      }
+    }
+
+    function validateMinerals() {
+      const seen = new Set();
+      if (!state.minerals.length) throw new Error("Add at least one mineral.");
+      state.minerals.forEach((row, index) => {
+        if (!row.name) throw new Error(`Mineral ${index + 1} needs a name.`);
+        if (seen.has(row.name.toLowerCase())) throw new Error(`${row.name} is listed twice.`);
+        seen.add(row.name.toLowerCase());
+        const density = Number(row.density);
+        if (row.density === "" || Number.isNaN(density) || density <= 0) throw new Error(`${row.name} needs a density greater than zero.`);
+      });
+    }
+
+    function validateGrades() {
+      if (state.minerals.length === 1) return;
+      const checkRow = (values, label) => {
+        const blanks = values.map((value, index) => value === "" ? index : -1).filter((index) => index >= 0);
+        if (blanks.length > 1) throw new Error(`For ${label}, leave only the last mineral blank.`);
+        if (blanks.length === 1 && blanks[0] !== values.length - 1) throw new Error(`For ${label}, only the last mineral can be left blank.`);
+        values.forEach((value) => {
+          if (value === "") return;
+          const number = Number(value);
+          if (Number.isNaN(number) || number < 0 || number > 100) throw new Error(`${label} needs percents from 0 to 100.`);
+        });
+      };
+      if (state.compositionMode === "overall") {
+        checkRow(state.minerals.map((mineral) => state.overall[mineral.name] || ""), "the overall grades");
+      } else {
+        state.sizes.forEach((size, index) => {
+          const row = state.bySize[index] || {};
+          checkRow(state.minerals.map((mineral) => row[mineral.name] || ""), `size class ${index + 1}`);
+        });
+      }
+    }
+
+    function validateCircuit() {
+      if (state.feedRate !== "" && !(Number(state.feedRate) > 0)) throw new Error("Feed rate needs to be greater than zero, or left blank.");
+      if (state.solids !== "") {
+        const solids = Number(state.solids);
+        if (Number.isNaN(solids) || solids < 1 || solids > 85) throw new Error("Percent solids needs to be from 1 to 85, or left blank.");
+      }
+    }
+
+    function validatePlant() {
+      const anyYield = Object.values(state.yields).some((value) => value !== "");
+      const anyGrade = Object.values(state.grades).some((row) => Object.values(row).some((value) => value !== ""));
+      const anyRecovery = Object.values(state.recoveries).some((row) => Object.values(row).some((value) => value !== ""));
+      if (!anyYield && !anyGrade && !anyRecovery) {
+        throw new Error("Enter at least one yield, grade, or recovery, or go back and skip calibration.");
+      }
+    }
+
+    function payload() {
+      const body = {
+        sizes: state.sizes,
+        minerals: state.minerals,
+        composition_mode: state.compositionMode,
+        overall_grades: state.overall,
+        grades_by_size: state.bySize,
+        feed_rate_tph: state.feedRate,
+        pct_solids: state.solids,
+        n_products: state.nProducts,
+        dense_is_concentrate: state.dense,
+        preset: state.preset
+      };
+      if (state.calibrate) {
+        body.plant = {
+          yields: state.yields,
+          grades: state.grades,
+          recoveries: state.wantRecoveries ? state.recoveries : {},
+          splitter_outer: state.surveyOuter || "50",
+          splitter_inner: state.surveyInner || "50"
+        };
+      }
+      if (state.openingMode === "openings") {
+        body.splitters = { outer_opening: state.outer, inner_opening: state.inner };
+      }
+      if (state.openingMode === "targets") {
+        body.targets = { concentrate: state.targetConc, middlings: state.targetMidd };
+      }
+      return body;
+    }
+
+    async function onRun() {
+      capture();
+      const button = document.getElementById("run");
+      button.disabled = true;
+      button.textContent = "Running…";
+      try {
+        result = await post("/api/simulate", payload());
+        changeNote = "";
+        go("results");
+      } catch (error) {
+        showError(error.message);
+        button.disabled = false;
+        button.textContent = "Run simulation";
+      }
+    }
+
+    async function onRerun() {
+      const button = document.getElementById("rerun");
+      const before = result;
+      button.disabled = true;
+      try {
+        const body = {
+          session: result.session,
+          splitters: {
+            outer_opening: document.getElementById("adj-outer").value,
+            inner_opening: document.getElementById("adj-inner") ? document.getElementById("adj-inner").value : ""
+          },
+          parameters: {
+            rho50_outer_ref: document.getElementById("adj-outer-cut").value,
+            rho50_inner_ref: document.getElementById("adj-inner-cut") ? document.getElementById("adj-inner-cut").value : "",
+            imperfection_ref: document.getElementById("adj-i").value,
+            curve: document.getElementById("adj-curve").value
+          }
+        };
+        const conc = document.getElementById("adj-conc").value.trim();
+        const midd = document.getElementById("adj-midd");
+        if (conc !== "") {
+          body.targets = { concentrate: conc, middlings: midd ? midd.value.trim() : "" };
+        }
+        result = await post("/api/rerun", body);
+        changeNote = yieldChangeNote(before, result);
+        draw();
+        document.getElementById("screen").scrollIntoView({ block: "start" });
+      } catch (error) {
+        showError(error.message);
+        button.disabled = false;
+      }
+    }
+
+    async function loadExample() {
+      try {
+        result = await getJson("/api/example");
+        changeNote = "";
+        go("results");
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    function fillStarter() {
+      state.sizes = [
+        { d_low: "0.15", d_high: "0.30", mass_percent: "60" },
+        { d_low: "0", d_high: "0.15", mass_percent: "40" }
+      ];
+      state.minerals = [
+        { name: "Quartz", density: "2.65" },
+        { name: "Ilmenite", density: "4.70" }
+      ];
+      state.compositionMode = "overall";
+      state.overall = { Quartz: "75", Ilmenite: "" };
+      state.nProducts = 3;
+      state.dense = true;
+      go("sizes");
+    }
+
+    function loadFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const session = JSON.parse(String(reader.result));
+          result = await post("/api/session", session);
+          changeNote = "";
+          go("results");
+        } catch (error) {
+          showError(error.message || "That file could not be read.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function downloadSession() {
+      const blob = new Blob([JSON.stringify(result.session, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "spiral-session.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+
+    async function post(url, body) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      const data = await response.json();
+      if (!response.ok || data.ok === false) throw new Error(data.error || "The simulation could not run.");
+      return data;
+    }
+
+    async function getJson(url) {
+      const response = await fetch(url);
+      const data = await response.json();
+      if (!response.ok || data.ok === false) throw new Error(data.error || "The page could not load that data.");
+      return data;
+    }
+
+    function go(next) {
+      step = next;
+      draw();
+    }
+
+    draw();
+  </script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "description": "Spiral concentrator session. The separation model is the generalized bivariate size-density partition function (R.P. King, Modeling and Simulation of Mineral Processing Systems, Chapter 7), applied as an outer cut and then an inner cut.",
+  "units": {
+    "size": "mm",
+    "density": "g/cm3",
+    "mass_fraction": "0 to 1",
+    "grade": "0 to 1",
+    "yield": "0 to 1",
+    "recovery": "0 to 1",
+    "splitter_opening": "0 to 100; 50 applies the stored reference cut densities"
+  },
+  "feed": {
+    "size_classes": [
+      {
+        "d_low": 0.6,
+        "d_high": 1.0,
+        "mass_fraction": 0.08
+      },
+      {
+        "d_low": 0.3,
+        "d_high": 0.6,
+        "mass_fraction": 0.17
+      },
+      {
+        "d_low": 0.15,
+        "d_high": 0.3,
+        "mass_fraction": 0.3
+      },
+      {
+        "d_low": 0.106,
+        "d_high": 0.15,
+        "mass_fraction": 0.25
+      },
+      {
+        "d_low": 0.075,
+        "d_high": 0.106,
+        "mass_fraction": 0.12
+      },
+      {
+        "d_low": 0.045,
+        "d_high": 0.075,
+        "mass_fraction": 0.05
+      },
+      {
+        "d_low": 0.0,
+        "d_high": 0.045,
+        "mass_fraction": 0.03
+      }
+    ],
+    "minerals": [
+      {
+        "name": "Quartz",
+        "density": 2.65
+      },
+      {
+        "name": "Rutile",
+        "density": 4.25
+      },
+      {
+        "name": "Zircon",
+        "density": 4.65
+      }
+    ],
+    "composition": [
+      [
+        0.92,
+        0.05,
+        0.03
+      ],
+      [
+        0.88,
+        0.07,
+        0.05
+      ],
+      [
+        0.8,
+        0.12,
+        0.08
+      ],
+      [
+        0.78,
+        0.13,
+        0.09
+      ],
+      [
+        0.82,
+        0.11,
+        0.07
+      ],
+      [
+        0.9,
+        0.06,
+        0.04
+      ],
+      [
+        0.95,
+        0.03,
+        0.02
+      ]
+    ]
+  },
+  "operating": {
+    "feed_rate_tph": 20.0,
+    "pct_solids": 32.0
+  },
+  "parameters": {
+    "rho50_outer_ref": 3.35,
+    "rho50_inner_ref": 4.05,
+    "d_ref": 0.15,
+    "n_cut": 0.18,
+    "imperfection_ref": 0.1,
+    "m_sharp": 0.25,
+    "bypass_outer_coarse": 0.02,
+    "bypass_outer_slime": 0.25,
+    "d_slime": 0.075,
+    "slime_exponent": 1.5,
+    "bypass_inner": 0.005,
+    "rho_fluid": 1.0,
+    "curve": "erf",
+    "solids_ref": 30.0,
+    "solids_ep_coeff": 0.015,
+    "solids_bypass_coeff": 0.004,
+    "splitter_sensitivity": 1.2
+  },
+  "splitters": {
+    "outer_opening": 50.0,
+    "inner_opening": 50.0
+  },
+  "n_products": 3,
+  "dense_is_concentrate": true,
+  "parameter_source": "density-defaults",
+  "source_note": "Cut densities were placed between the lightest mineral (2.65 g/cm3) and the heaviest (4.65 g/cm3): the outer cut at 35% of that gap and the inner cut at 70%. That is a typical uncalibrated rougher/cleaner starting point, not a measurement on your spiral.",
+  "fit_message": "",
+  "plant": null
+}
