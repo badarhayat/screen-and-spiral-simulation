@@ -191,6 +191,7 @@ class App:
             "fit the cuts to it. If you do not, I will start from your mineral densities "
             "and typical spiral sharpness, and I will say that the results are approximate."
         )
+        self.ui.say("To open this in a browser instead, run: python3 -m spiral_sim --web")
         self.ui.say("")
 
     def _run_demo(self) -> None:
@@ -1178,11 +1179,23 @@ def _parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="Load a saved session, simulate it, and exit.",
     )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Serve the simulator at http://127.0.0.1:8080 until stopped.",
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Host for --web.")
+    parser.add_argument("--port", type=int, default=8080, help="Port for --web.")
     return parser
 
 
 def main(argv: list[str] | None = None, stdin=None, stdout=None) -> int:
     args = _parser().parse_args(argv)
+    if getattr(args, "web", False):
+        from spiral_sim.web import serve
+
+        serve(args.host, args.port)
+        return 0
     ui = UI(stdin, stdout)
     try:
         if args.session:

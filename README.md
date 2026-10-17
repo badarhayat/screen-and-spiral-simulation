@@ -6,17 +6,24 @@ The same equations are used for every ore. Minerals are whatever you name, each 
 
 The program uses only the Python standard library (3.9 or newer).
 
-## Run it
+## Run it in a browser
 
 From this directory:
 
 ```bash
-python3 -m spiral_sim
+python3 -m spiral_sim --web
 ```
 
-Other ways in:
+Then open [http://127.0.0.1:8080](http://127.0.0.1:8080). The page asks for the feed one step at a time, runs the same model as the command-line program, and lets you change the splitters or the cut densities and run again. Leave the terminal open while you use it. Ctrl+C stops the server.
 
 ```bash
+python3 -m spiral_sim --web --port 8080
+```
+
+## Run it in the terminal
+
+```bash
+python3 -m spiral_sim
 python3 -m spiral_sim --example          # heavy-mineral sands, then exit
 python3 -m spiral_sim --demo-fit         # fit a synthetic survey, then exit
 python3 -m spiral_sim --session my.json  # load a saved session, then exit
