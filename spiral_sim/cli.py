@@ -1182,19 +1182,70 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--web",
         action="store_true",
-        help="Serve the simulator at http://127.0.0.1:8080 until stopped.",
+        help="Open the simulator in a browser at http://127.0.0.1:8080 and keep running until stopped.",
+    )
+    parser.add_argument(
+        "--cli",
+        action="store_true",
+        help="Use the step-by-step terminal conversation instead of the browser.",
+    )
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="With --web, do not open a browser window automatically.",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Host for --web.")
     parser.add_argument("--port", type=int, default=8080, help="Port for --web.")
     return parser
 
 
+def should_serve_web(args, *, frozen: bool) -> bool:
+    """Decide whether this launch should open the browser simulator.
+
+    ``python -m spiral_sim --web`` always does. A double-clicked Windows
+    executable has no arguments, so that launch does too. ``--example``,
+    ``--demo-fit``, ``--session``, and ``--cli`` keep their own modes.
+    """
+    if getattr(args, "web", False):
+        return True
+    if not frozen:
+        return False
+    return not (
+        args.example or args.demo_fit or args.session or getattr(args, "cli", False)
+    )
+
+
+def hold_frozen_window() -> None:
+    """Keep a double-clicked console window open long enough to read an error."""
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        if sys.stdin is None or not sys.stdin.isatty():
+            return
+        input("Press Enter to close this window.")
+    except (EOFError, KeyboardInterrupt):
+        return
+
+
 def main(argv: list[str] | None = None, stdin=None, stdout=None) -> int:
     args = _parser().parse_args(argv)
-    if getattr(args, "web", False):
+    frozen = getattr(sys, "frozen", False)
+    if should_serve_web(args, frozen=frozen):
         from spiral_sim.web import serve
 
-        serve(args.host, args.port)
+        try:
+            serve(args.host, args.port, open_browser=not args.no_browser)
+        except OSError as exc:
+            print(
+                f"Could not start Spiral Concentrator on {args.host}:{args.port}."
+            )
+            print(exc)
+            print(
+                "If the program is already open, use that window. "
+                "Otherwise run SpiralConcentrator.exe --port 8081"
+            )
+            hold_frozen_window()
+            return 1
         return 0
     ui = UI(stdin, stdout)
     try:

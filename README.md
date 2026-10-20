@@ -98,6 +98,31 @@ Fitted parameters are the opening-50 cuts. If the survey was taken at another op
 
 From the menu, save writes a JSON file with the feed, parameters, splitter openings, and any plant survey. Fractions in the file run from 0 to 1. The conversation speaks in percent. Load that file later, or pass it to `--session`.
 
+## Windows app
+
+People who do not have Python can run `SpiralConcentrator.exe`. Double-click it. A console window stays open, the simulator starts, and the browser opens at [http://127.0.0.1:8080](http://127.0.0.1:8080). Leave that console window open while you use the program. Closing it stops the simulator.
+
+From a Command Prompt the same flags as the Python program work, including the browser mode:
+
+```bat
+SpiralConcentrator.exe --web
+SpiralConcentrator.exe --web --port 8081
+SpiralConcentrator.exe --example
+SpiralConcentrator.exe --cli
+```
+
+A double-click is the same as `--web`. `--cli` starts the step-by-step terminal conversation instead. `--no-browser` starts the page without opening a browser on its own.
+
+The executable has to be built on Windows. PyInstaller cannot produce an `.exe` from Linux or macOS.
+
+```bat
+powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
+```
+
+That writes `dist\SpiralConcentrator.exe`. The PyInstaller configuration is `packaging\SpiralConcentrator.spec`. It packs `spiral_sim` and the browser page `spiral_sim\static\index.html` into one file. The application name is Spiral Concentrator and the icon is `packaging\spiral.ico`.
+
+To make an installer later, install [Inno Setup 6](https://jrsoftware.org/isinfo.php) and compile `packaging\SpiralConcentrator.iss`. The installer is `dist\SpiralConcentrator-Setup.exe`. It does not need administrator rights. It adds a Start menu entry and, if chosen, a desktop icon.
+
 ## Tests
 
 ```bash

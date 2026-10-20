@@ -7,7 +7,10 @@ import threading
 import unittest
 import urllib.request
 
-from spiral_sim.web import example_payload, make_server, rerun_session, run_wizard
+from pathlib import Path
+
+from spiral_sim.cli import _parser, should_serve_web
+from spiral_sim.web import example_payload, make_server, rerun_session, run_wizard, static_page_path
 
 
 def quartz_ilmenite() -> dict:
@@ -82,6 +85,25 @@ class WizardTests(unittest.TestCase):
         payload["sizes"][0]["d_high"] = 0.10
         with self.assertRaises(ValueError):
             run_wizard(payload)
+
+
+class LaunchTests(unittest.TestCase):
+    def test_web_flag_and_frozen_double_click_open_the_browser(self):
+        self.assertTrue(should_serve_web(_parser().parse_args(["--web"]), frozen=False))
+        self.assertTrue(should_serve_web(_parser().parse_args([]), frozen=True))
+        self.assertFalse(should_serve_web(_parser().parse_args([]), frozen=False))
+        self.assertFalse(should_serve_web(_parser().parse_args(["--example"]), frozen=True))
+        self.assertFalse(should_serve_web(_parser().parse_args(["--cli"]), frozen=True))
+        self.assertFalse(should_serve_web(_parser().parse_args(["--session", "feed.json"]), frozen=True))
+
+    def test_browser_page_and_windows_icon_are_present(self):
+        page = static_page_path()
+        self.assertTrue(page.is_file())
+        self.assertIn("Spiral concentrator", page.read_text(encoding="utf-8"))
+        icon = Path(__file__).resolve().parents[1] / "packaging" / "spiral.ico"
+        data = icon.read_bytes()
+        self.assertEqual(data[:4], b"\x00\x00\x01\x00")
+        self.assertGreaterEqual(int.from_bytes(data[4:6], "little"), 4)
 
 
 class ServerTests(unittest.TestCase):
