@@ -8,6 +8,10 @@ model, calibration, and mass balance as the command-line program.
 from __future__ import annotations
 
 import json
+import sys
+import threading
+import time
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -22,7 +26,17 @@ from spiral_sim.simulate import PRODUCT_LABELS, SimulationResult, active_product
 from spiral_sim.targets import match_mass_pulls
 
 
-STATIC_PAGE = Path(__file__).resolve().parent / "static" / "index.html"
+def static_page_path() -> Path:
+    """Locate the browser page, including inside a PyInstaller one-file executable.
+
+    A frozen executable unpacks data files under ``sys._MEIPASS``. The page is
+    stored there as ``spiral_sim/static/index.html``. A normal Python run reads
+    the file next to this module.
+    """
+    if getattr(sys, "frozen", False):
+        base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+        return base / "spiral_sim" / "static" / "index.html"
+    return Path(__file__).resolve().parent / "static" / "index.html"
 
 
 def _blank(value) -> bool:
@@ -611,10 +625,11 @@ def make_server(host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServe
             return data
 
         def _send_page(self) -> None:
-            if not STATIC_PAGE.exists():
+            page = static_page_path()
+            if not page.exists():
                 self._send_json({"ok": False, "error": "The page file is missing."}, 500)
                 return
-            body = STATIC_PAGE.read_bytes()
+            body = page.read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
@@ -635,12 +650,31 @@ def make_server(host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServe
     return ThreadingHTTPServer((host, port), Handler)
 
 
-def serve(host: str = "127.0.0.1", port: int = 8080) -> None:
+def _open_browser_later(url: str) -> None:
+    """Give the server a moment to listen, then open the user's browser."""
+    time.sleep(0.6)
+    try:
+        opened = webbrowser.open(url)
+    except Exception:
+        opened = False
+    if not opened:
+        print(f"Open this address in your browser: {url}")
+
+
+def serve(host: str = "127.0.0.1", port: int = 8080, open_browser: bool = False) -> None:
     """Serve the simulator until the process is stopped."""
     server = make_server(host, port)
     shown_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
-    print(f"Spiral concentrator is running at http://{shown_host}:{port}")
-    print("Press Ctrl+C to stop.")
+    url = f"http://{shown_host}:{port}"
+    print("Spiral Concentrator")
+    print(f"The simulator is running at {url}")
+    print("Leave this window open while you use it.")
+    print("Closing this window stops the simulator.")
+    if open_browser:
+        print("Your browser should open on its own. If it does not, paste the address above into the browser.")
+        threading.Thread(target=_open_browser_later, args=(url,), daemon=True).start()
+    else:
+        print("Open that address in a browser.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
