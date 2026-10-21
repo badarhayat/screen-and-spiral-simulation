@@ -105,6 +105,15 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(data[:4], b"\x00\x00\x01\x00")
         self.assertGreaterEqual(int.from_bytes(data[4:6], "little"), 4)
 
+    def test_results_back_button_keeps_the_page_in_place(self):
+        page = static_page_path().read_text(encoding="utf-8")
+        self.assertIn("← Back", page)
+        self.assertIn("New simulation", page)
+        self.assertIn("The feed, settings, and results on this page will be cleared.", page)
+        self.assertIn("popstate", page)
+        self.assertIn("history.pushState", page)
+        self.assertNotIn('location.href = "http', page)
+
 
 class ServerTests(unittest.TestCase):
     def test_pages_and_example(self):

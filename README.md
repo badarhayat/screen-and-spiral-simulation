@@ -14,7 +14,7 @@ From this directory:
 python3 -m spiral_sim --web
 ```
 
-Then open [http://127.0.0.1:8080](http://127.0.0.1:8080). The page asks for the feed one step at a time, runs the same model as the command-line program, and lets you change the splitters or the cut densities and run again. Leave the terminal open while you use it. Ctrl+C stops the server.
+Then open [http://127.0.0.1:8080](http://127.0.0.1:8080). The page asks for the feed one step at a time, runs the same model as the command-line program, and lets you change the splitters or the cut densities and run again. On the results page, **← Back** returns to the setup and keeps the feed, settings, and results. Open Results again, or use the browser’s Back and Forward buttons, and the same results come back when the inputs are unchanged. **New simulation** asks before it clears them. Leave the terminal open while you use it. Ctrl+C stops the server.
 
 ```bash
 python3 -m spiral_sim --web --port 8080
@@ -119,7 +119,7 @@ The executable has to be built on Windows. PyInstaller cannot produce an `.exe` 
 powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1
 ```
 
-That writes `dist\SpiralConcentrator.exe`. The PyInstaller configuration is `packaging\SpiralConcentrator.spec`. It packs `spiral_sim` and the browser page `spiral_sim\static\index.html` into one file. The application name is Spiral Concentrator and the icon is `packaging\spiral.ico`.
+That writes `dist\SpiralConcentrator.exe`. The PyInstaller configuration is `packaging\SpiralConcentrator.spec`. It packs `spiral_sim` and the browser page `spiral_sim\static\index.html` into one file, so rebuild with the same command after a page change. The application name is Spiral Concentrator and the icon is `packaging\spiral.ico`. The build is for 64-bit Windows.
 
 To make an installer later, install [Inno Setup 6](https://jrsoftware.org/isinfo.php) and compile `packaging\SpiralConcentrator.iss`. The installer is `dist\SpiralConcentrator-Setup.exe`. It does not need administrator rights. It adds a Start menu entry and, if chosen, a desktop icon.
 

@@ -52,7 +52,10 @@
       font-size: 13px;
     }
     nav button.current { background: var(--ink); color: white; border-color: var(--ink); }
-    nav button:disabled { opacity: 0.45; }
+    nav button { cursor: pointer; }
+    nav button:disabled { opacity: 0.45; cursor: default; }
+    button.back { background: var(--ink); color: white; border-color: var(--ink); font-weight: 700; }
+    .results-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 16px; }
     .card {
       background: var(--card);
       border: 1px solid var(--line);
@@ -142,6 +145,10 @@
     let result = null;
     let changeNote = "";
     let busy = false;
+    let resultFingerprint = "";
+    let resultAdjustKey = "";
+    const visited = new Set(["welcome"]);
+    const trail = ["welcome"];
 
     const steps = [
       ["welcome", "Start"],
@@ -179,7 +186,8 @@
         inner: "50",
         targetConc: "",
         targetMidd: "",
-        notice: ""
+        notice: "",
+        adjustDraft: null
       };
     }
 
@@ -199,7 +207,8 @@
         const hidden = id === "plant" && !state.calibrate;
         if (hidden) return "";
         const current = id === step;
-        return `<button type="button" class="${current ? "current" : ""}" disabled>${esc(label)}</button>`;
+        const canOpen = !current && (visited.has(id) || (id === "results" && result));
+        return `<button type="button" class="${current ? "current" : ""}" ${canOpen ? `data-nav="${id}"` : "disabled"}>${esc(label)}</button>`;
       }).join("");
       const screen = document.getElementById("screen");
       screen.innerHTML = screens[step]();
@@ -231,6 +240,7 @@
           <div class="actions">
             <label class="file-button">Load a saved session<input id="file" type="file" accept="application/json,.json" hidden></label>
           </div>
+          ${result ? `<div class="actions"><button class="ghost new-simulation" type="button">New simulation</button></div>` : ""}
           <p id="error"></p>`;
       },
       sizes() {
@@ -472,7 +482,24 @@
           ? `<h3>Survey versus this fit</h3>${table(["Measurement", "Observed %", "Fitted %", "Gap"], result.fit_comparisons.map((row) => [row.label, fmt(row.observed), fmt(row.predicted), row.gap === null ? "n/a" : (row.gap > 0 ? "+" : "") + fmt(row.gap)]))}`
           : "";
         const warnings = (result.warnings || []).map((item) => `<div class="banner warn">${esc(item)}</div>`).join("");
+        const draft = state.adjustDraft;
+        const shown = {
+          outer: draft ? draft.outer : result.splitters.outer_opening,
+          inner: draft ? draft.inner : result.splitters.inner_opening,
+          outerCut: draft ? draft.outerCut : params.rho50_outer_ref,
+          innerCut: draft ? draft.innerCut : params.rho50_inner_ref,
+          imperfection: draft ? draft.imperfection : params.imperfection_ref,
+          curve: draft ? draft.curve : params.curve,
+          conc: draft ? draft.conc : "",
+          midd: draft ? draft.midd : ""
+        };
+        const stale = resultsAreStale();
         return `
+          <div class="results-toolbar">
+            <button class="back back-step" type="button">← Back</button>
+            <button class="ghost new-simulation" type="button">New simulation</button>
+          </div>
+          ${stale ? `<div class="banner warn">These are the previous results. They stay as they are until you run the simulation again.</div>` : ""}
           <div class="banner ${bannerClass}">${esc(result.source_summary)}</div>
           ${result.source_note ? `<p>${esc(result.source_note)}</p>` : ""}
           ${result.fit_message ? `<p>${esc(result.fit_message)}</p>` : ""}
@@ -511,24 +538,25 @@
           <h3>Change the splitters or the cuts and run again</h3>
           <p class="muted">This keeps the feed. You do not need to start over. ${esc(adjustHelp(three, result.dense_is_concentrate))}</p>
           <div class="two">
-            <label>Outer opening<input id="adj-outer" value="${esc(result.splitters.outer_opening)}" inputmode="decimal"></label>
-            ${three ? `<label>Inner opening<input id="adj-inner" value="${esc(result.splitters.inner_opening)}" inputmode="decimal"></label>` : ""}
-            <label>Outer cut density, g/cm3<input id="adj-outer-cut" value="${esc(params.rho50_outer_ref)}" inputmode="decimal"></label>
-            ${three ? `<label>Inner cut density, g/cm3<input id="adj-inner-cut" value="${esc(params.rho50_inner_ref)}" inputmode="decimal"></label>` : ""}
-            <label>Imperfection I*<input id="adj-i" value="${esc(params.imperfection_ref)}" inputmode="decimal"></label>
+            <label>Outer opening<input id="adj-outer" value="${esc(shown.outer)}" inputmode="decimal"></label>
+            ${three ? `<label>Inner opening<input id="adj-inner" value="${esc(shown.inner)}" inputmode="decimal"></label>` : ""}
+            <label>Outer cut density, g/cm3<input id="adj-outer-cut" value="${esc(shown.outerCut)}" inputmode="decimal"></label>
+            ${three ? `<label>Inner cut density, g/cm3<input id="adj-inner-cut" value="${esc(shown.innerCut)}" inputmode="decimal"></label>` : ""}
+            <label>Imperfection I*<input id="adj-i" value="${esc(shown.imperfection)}" inputmode="decimal"></label>
             <label>Curve
               <select id="adj-curve">
-                <option value="erf" ${params.curve === "erf" ? "selected" : ""}>Error function</option>
-                <option value="logistic" ${params.curve === "logistic" ? "selected" : ""}>Logistic sigmoid</option>
+                <option value="erf" ${shown.curve === "erf" ? "selected" : ""}>Error function</option>
+                <option value="logistic" ${shown.curve === "logistic" ? "selected" : ""}>Logistic sigmoid</option>
               </select>
             </label>
-            <label>Target concentrate yield, %<input id="adj-conc" placeholder="Optional" inputmode="decimal"></label>
-            ${three ? `<label>Target middlings yield, %<input id="adj-midd" placeholder="Optional" inputmode="decimal"></label>` : ""}
+            <label>Target concentrate yield, %<input id="adj-conc" value="${esc(shown.conc)}" placeholder="Optional" inputmode="decimal"></label>
+            ${three ? `<label>Target middlings yield, %<input id="adj-midd" value="${esc(shown.midd)}" placeholder="Optional" inputmode="decimal"></label>` : ""}
           </div>
           <div class="actions">
+            <button class="back back-step" type="button">← Back</button>
             <button type="button" id="rerun">Run again</button>
             <button class="secondary" type="button" id="download">Download session</button>
-            <button class="ghost" type="button" id="restart">Start over</button>
+            <button class="ghost new-simulation" type="button">New simulation</button>
           </div>
           <p id="error"></p>
           <p class="note">${esc(result.calibration_note)}</p>`;
@@ -594,9 +622,24 @@
     function bind() {
       document.querySelectorAll("[data-go]").forEach((node) => node.addEventListener("click", () => go(node.dataset.go === "new" ? "sizes" : node.dataset.go)));
       document.querySelectorAll("[data-back]").forEach((node) => node.addEventListener("click", () => {
-        capture();
-        go(node.dataset.back);
+        rememberStep();
+        const target = node.dataset.back;
+        if (trail.length > 1 && trail[trail.length - 2] === target) {
+          history.back();
+          return;
+        }
+        go(target);
       }));
+      document.querySelectorAll("[data-nav]").forEach((node) => node.addEventListener("click", () => {
+        const target = node.dataset.nav;
+        if (!target || target === step) return;
+        if (target === "results" && !result) return;
+        if (target === "plant" && !state.calibrate) return;
+        rememberStep();
+        go(target);
+      }));
+      document.querySelectorAll(".back-step").forEach((node) => node.addEventListener("click", onBack));
+      document.querySelectorAll(".new-simulation").forEach((node) => node.addEventListener("click", startFresh));
       const addSize = document.getElementById("add-size");
       if (addSize) addSize.addEventListener("click", () => { capture(); state.sizes.push({ d_low: "", d_high: "", mass_percent: "" }); draw(); });
       const addMineral = document.getElementById("add-mineral");
@@ -632,8 +675,156 @@
       if (rerun) rerun.addEventListener("click", onRerun);
       const download = document.getElementById("download");
       if (download) download.addEventListener("click", downloadSession);
-      const restart = document.getElementById("restart");
-      if (restart) restart.addEventListener("click", () => { Object.assign(state, blankState()); result = null; changeNote = ""; go("welcome"); });
+    }
+
+    function numText(value) {
+      if (value === null || value === undefined || value === "") return "";
+      const number = Number(value);
+      if (Number.isNaN(number)) return String(value).trim();
+      return String(Math.round(number * 1e6) / 1e6);
+    }
+
+    function percentText(fraction) {
+      if (fraction === null || fraction === undefined || fraction === "") return "";
+      return numText(Number(fraction) * 100);
+    }
+
+    function adjustKey(draft) {
+      return JSON.stringify({
+        outer: numText(draft.outer),
+        inner: numText(draft.inner),
+        outerCut: numText(draft.outerCut),
+        innerCut: numText(draft.innerCut),
+        imperfection: numText(draft.imperfection),
+        curve: draft.curve || "erf",
+        conc: numText(draft.conc),
+        midd: numText(draft.midd)
+      });
+    }
+
+    function adjustKeyFromResult(value) {
+      return adjustKey({
+        outer: value.splitters.outer_opening,
+        inner: value.splitters.inner_opening,
+        outerCut: value.parameters.rho50_outer_ref,
+        innerCut: value.parameters.rho50_inner_ref,
+        imperfection: value.parameters.imperfection_ref,
+        curve: value.parameters.curve,
+        conc: "",
+        midd: ""
+      });
+    }
+
+    function resultsAreStale() {
+      if (!result || !resultFingerprint) return false;
+      if (simulationFingerprint() !== resultFingerprint) return true;
+      if (!state.adjustDraft || !resultAdjustKey) return false;
+      return adjustKey(state.adjustDraft) !== resultAdjustKey;
+    }
+
+    function rememberResult(value) {
+      result = value;
+      resultFingerprint = simulationFingerprint();
+      resultAdjustKey = adjustKeyFromResult(value);
+      state.adjustDraft = null;
+    }
+
+    function applySession(session) {
+      const feed = session.feed;
+      state.sizes = feed.size_classes.map((size) => ({
+        d_low: numText(size.d_low),
+        d_high: numText(size.d_high),
+        mass_percent: percentText(size.mass_fraction)
+      }));
+      state.minerals = feed.minerals.map((mineral) => ({
+        name: mineral.name,
+        density: numText(mineral.density)
+      }));
+      state.compositionMode = "by_size";
+      state.bySize = (feed.composition || []).map((row) => {
+        const grades = {};
+        feed.minerals.forEach((mineral, index) => { grades[mineral.name] = percentText(row[index]); });
+        return grades;
+      });
+      state.overall = {};
+      const operating = session.operating || {};
+      state.feedRate = operating.feed_rate_tph == null ? "" : numText(operating.feed_rate_tph);
+      state.solids = operating.pct_solids == null ? "" : numText(operating.pct_solids);
+      state.nProducts = session.n_products || 3;
+      state.dense = session.dense_is_concentrate !== false;
+      state.preset = session.parameter_source === "heavy-mineral-preset" ? "heavy-mineral" : "density";
+      state.openingMode = "openings";
+      state.outer = numText((session.splitters || {}).outer_opening ?? 50);
+      state.inner = numText((session.splitters || {}).inner_opening ?? 50);
+      state.targetConc = "";
+      state.targetMidd = "";
+      const plant = session.plant;
+      state.calibrate = Boolean(plant);
+      state.yields = {};
+      state.grades = {};
+      state.recoveries = {};
+      state.wantRecoveries = false;
+      state.surveyOuter = "50";
+      state.surveyInner = "50";
+      if (plant) {
+        Object.entries(plant.yields || {}).forEach(([key, value]) => { state.yields[key] = percentText(value); });
+        Object.entries(plant.grades || {}).forEach(([product, row]) => {
+          state.grades[product] = {};
+          Object.entries(row || {}).forEach(([mineral, value]) => { state.grades[product][mineral] = percentText(value); });
+        });
+        Object.entries(plant.recoveries || {}).forEach(([product, row]) => {
+          state.recoveries[product] = {};
+          Object.entries(row || {}).forEach(([mineral, value]) => {
+            if (value != null) state.wantRecoveries = true;
+            state.recoveries[product][mineral] = percentText(value);
+          });
+        });
+        state.surveyOuter = numText(plant.splitter_outer ?? 50);
+        state.surveyInner = numText(plant.splitter_inner ?? 50);
+      }
+      ["welcome", "sizes", "minerals", "grades", "circuit", "data", "splitters"].forEach((id) => visited.add(id));
+      if (state.calibrate) visited.add("plant");
+    }
+
+    function rememberStep() {
+      if (step === "results") captureAdjust();
+      else capture();
+    }
+
+    function captureAdjust() {
+      const outer = document.getElementById("adj-outer");
+      if (!outer) return;
+      state.adjustDraft = {
+        outer: outer.value.trim(),
+        inner: document.getElementById("adj-inner") ? document.getElementById("adj-inner").value.trim() : "",
+        outerCut: document.getElementById("adj-outer-cut").value.trim(),
+        innerCut: document.getElementById("adj-inner-cut") ? document.getElementById("adj-inner-cut").value.trim() : "",
+        imperfection: document.getElementById("adj-i").value.trim(),
+        curve: document.getElementById("adj-curve").value,
+        conc: document.getElementById("adj-conc").value.trim(),
+        midd: document.getElementById("adj-midd") ? document.getElementById("adj-midd").value.trim() : ""
+      };
+    }
+
+    function onBack() {
+      rememberStep();
+      if (trail.length > 1) history.back();
+    }
+
+    function startFresh() {
+      const confirmed = window.confirm("Start a new simulation? The feed, settings, and results on this page will be cleared.");
+      if (!confirmed) return;
+      Object.assign(state, blankState());
+      result = null;
+      resultFingerprint = "";
+      resultAdjustKey = "";
+      changeNote = "";
+      visited.clear();
+      visited.add("welcome");
+      trail.length = 0;
+      trail.push("welcome");
+      history.pushState({ spiralStep: "welcome", trail: trail.slice() }, "", location.href);
+      show("welcome");
     }
 
     function capture() {
@@ -797,6 +988,10 @@
       }
     }
 
+    function simulationFingerprint() {
+      return JSON.stringify(payload());
+    }
+
     function payload() {
       const body = {
         sizes: state.sizes,
@@ -830,13 +1025,17 @@
 
     async function onRun() {
       capture();
+      if (result && simulationFingerprint() === resultFingerprint) {
+        openResults();
+        return;
+      }
       const button = document.getElementById("run");
       button.disabled = true;
       button.textContent = "Running…";
       try {
-        result = await post("/api/simulate", payload());
         changeNote = "";
-        go("results");
+        rememberResult(await post("/api/simulate", payload()));
+        openResults();
       } catch (error) {
         showError(error.message);
         button.disabled = false;
@@ -867,8 +1066,15 @@
         if (conc !== "") {
           body.targets = { concentrate: conc, middlings: midd ? midd.value.trim() : "" };
         }
-        result = await post("/api/rerun", body);
-        changeNote = yieldChangeNote(before, result);
+        let updated;
+        if (simulationFingerprint() !== resultFingerprint) {
+          updated = await post("/api/simulate", payload());
+          changeNote = before ? yieldChangeNote(before, updated) : "";
+        } else {
+          updated = await post("/api/rerun", body);
+          changeNote = yieldChangeNote(before, updated);
+        }
+        rememberResult(updated);
         draw();
         document.getElementById("screen").scrollIntoView({ block: "start" });
       } catch (error) {
@@ -879,9 +1085,11 @@
 
     async function loadExample() {
       try {
-        result = await getJson("/api/example");
+        const example = await getJson("/api/example");
+        applySession(example.session);
         changeNote = "";
-        go("results");
+        rememberResult(example);
+        openResults();
       } catch (error) {
         showError(error.message);
       }
@@ -909,9 +1117,11 @@
       reader.onload = async () => {
         try {
           const session = JSON.parse(String(reader.result));
-          result = await post("/api/session", session);
+          const loaded = await post("/api/session", session);
+          applySession(loaded.session);
           changeNote = "";
-          go("results");
+          rememberResult(loaded);
+          openResults();
         } catch (error) {
           showError(error.message || "That file could not be read.");
         }
@@ -946,12 +1156,54 @@
       return data;
     }
 
-    function go(next) {
+    function show(next) {
       step = next;
       draw();
     }
 
-    draw();
+    function go(next) {
+      if (trail[trail.length - 1] !== next) trail.push(next);
+      visited.add(next);
+      history.pushState({ spiralStep: next, trail: trail.slice() }, "", location.href);
+      show(next);
+    }
+
+    function openResults() {
+      ["welcome", "sizes", "minerals", "grades", "circuit", "data", "splitters", "results"].forEach((id) => visited.add(id));
+      if (state.calibrate) visited.add("plant");
+      if (trail[trail.length - 1] !== "splitters" && trail[trail.length - 1] !== "results") {
+        trail.push("splitters");
+        history.pushState({ spiralStep: "splitters", trail: trail.slice() }, "", location.href);
+      }
+      if (trail[trail.length - 1] === "results") {
+        show("results");
+        return;
+      }
+      go("results");
+    }
+
+    window.addEventListener("popstate", (event) => {
+      rememberStep();
+      const saved = event.state;
+      if (saved && saved.spiralStep && screens[saved.spiralStep]) {
+        trail.length = 0;
+        (saved.trail || [saved.spiralStep]).forEach((item) => trail.push(item));
+        if (saved.spiralStep === "results" && !result) {
+          trail.length = 0;
+          trail.push("welcome");
+          show("welcome");
+          return;
+        }
+        show(saved.spiralStep);
+        return;
+      }
+      if (trail.length > 1) {
+        history.pushState({ spiralStep: step, trail: trail.slice() }, "", location.href);
+      }
+    });
+
+    history.replaceState({ spiralStep: "welcome", trail: trail.slice() }, "", location.href);
+    show("welcome");
   </script>
 </body>
 </html>
