@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - cursor/windows-exe-packaging-0afd
+      - cursor/results-back-navigation-0afd
 
 jobs:
   windows-exe:
