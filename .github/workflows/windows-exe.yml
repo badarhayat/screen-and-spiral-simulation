@@ -6,6 +6,7 @@ on:
     branches:
       - cursor/windows-exe-packaging-0afd
       - cursor/results-back-navigation-0afd
+      - cursor/dashboard-autosave-precision-0afd
 
 jobs:
   windows-exe:

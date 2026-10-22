@@ -28,6 +28,7 @@ a = Analysis(
         "spiral_sim",
         "spiral_sim.cli",
         "spiral_sim.web",
+        "spiral_sim.workspace_store",
         "spiral_sim.model",
         "spiral_sim.feed",
         "spiral_sim.defaults",

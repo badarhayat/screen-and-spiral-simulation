@@ -3,14 +3,27 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import threading
 import unittest
+import urllib.error
 import urllib.request
 
 from pathlib import Path
 
 from spiral_sim.cli import _parser, should_serve_web
+from spiral_sim.examples import heavy_mineral_sands
 from spiral_sim.web import example_payload, make_server, rerun_session, run_wizard, static_page_path
+from spiral_sim.workspace_store import (
+    WorkspaceError,
+    clear_workspace,
+    discard_to_checkpoint,
+    draft_is_meaningful,
+    import_workspace,
+    read_workspace,
+    save_workspace,
+)
 
 
 def quartz_ilmenite() -> dict:
@@ -108,11 +121,144 @@ class LaunchTests(unittest.TestCase):
     def test_results_back_button_keeps_the_page_in_place(self):
         page = static_page_path().read_text(encoding="utf-8")
         self.assertIn("← Back", page)
+        self.assertIn("Decimal precision", page)
+        self.assertIn("Saving…", page)
+        self.assertIn("Save failed", page)
+        self.assertIn("Discard changes", page)
+        self.assertIn("Discard changes since the last simulation?", page)
+        self.assertIn("Reset simulation", page)
+        self.assertIn("Reset the simulation?", page)
         self.assertIn("New simulation", page)
         self.assertIn("The feed, settings, and results on this page will be cleared.", page)
         self.assertIn("popstate", page)
         self.assertIn("history.pushState", page)
         self.assertNotIn('location.href = "http', page)
+
+
+class WorkspaceTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.previous = os.environ.get("SPIRAL_WORKSPACE_DIR")
+        os.environ["SPIRAL_WORKSPACE_DIR"] = self.directory.name
+
+    def tearDown(self):
+        if self.previous is None:
+            os.environ.pop("SPIRAL_WORKSPACE_DIR", None)
+        else:
+            os.environ["SPIRAL_WORKSPACE_DIR"] = self.previous
+        self.directory.cleanup()
+
+    def draft(self, name="Ilmenite", precision=4, step="minerals"):
+        return {
+            "step": step,
+            "precision": precision,
+            "state": {"minerals": [{"name": name, "density": "4.7"}]},
+            "result": None,
+        }
+
+    def test_save_survives_a_new_read(self):
+        save_workspace(self.draft(), commit=True)
+        loaded = read_workspace()
+        self.assertEqual(loaded["draft"]["state"]["minerals"][0]["name"], "Ilmenite")
+        self.assertEqual(loaded["checkpoint"]["state"]["minerals"][0]["name"], "Ilmenite")
+
+    def test_empty_page_does_not_replace_a_saved_session(self):
+        save_workspace(self.draft())
+        with self.assertRaises(WorkspaceError):
+            save_workspace({"step": "welcome", "precision": 4, "state": {"sizes": [{"d_low": "", "d_high": "", "mass_percent": ""}]}})
+        self.assertEqual(read_workspace()["draft"]["state"]["minerals"][0]["name"], "Ilmenite")
+
+    def test_damaged_file_is_left_in_place(self):
+        path = os.path.join(self.directory.name, "workspace.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("{not json")
+        with self.assertRaises(WorkspaceError):
+            read_workspace()
+        with self.assertRaises(WorkspaceError):
+            save_workspace(self.draft())
+        with open(path, encoding="utf-8") as handle:
+            self.assertEqual(handle.read(), "{not json")
+
+    def test_discard_returns_to_the_checkpoint_and_reset_deletes_it(self):
+        save_workspace(self.draft("Quartz"), commit=True)
+        save_workspace(self.draft("Ilmenite"))
+        restored = discard_to_checkpoint()
+        self.assertEqual(restored["draft"]["state"]["minerals"][0]["name"], "Quartz")
+        clear_workspace()
+        self.assertIsNone(read_workspace())
+
+    def test_display_precision_does_not_change_the_balance(self):
+        session = heavy_mineral_sands()
+        first = session.run()
+        second = session.run()
+        for product in first.products:
+            self.assertEqual(first.yield_of(product), second.yield_of(product))
+        packed = example_payload()
+        concentrate = packed["yields"]["concentrate"]
+        self.assertGreater(abs(concentrate - round(concentrate, 2)), 1e-6)
+        self.assertNotEqual(round(concentrate, 4), round(concentrate, 5))
+        self.assertFalse(draft_is_meaningful({"step": "welcome", "precision": 5, "state": {}}))
+        with self.assertRaises(WorkspaceError):
+            import_workspace({"version": 1})
+        self.assertIsNone(read_workspace())
+        save_workspace(self.draft())
+        with self.assertRaises(WorkspaceError):
+            import_workspace({"draft": {"step": "minerals"}})
+        self.assertEqual(read_workspace()["draft"]["state"]["minerals"][0]["name"], "Ilmenite")
+
+    def test_http_workspace_round_trip(self):
+        server = make_server("127.0.0.1", 0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        port = server.server_address[1]
+        try:
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/workspace",
+                data=json.dumps({"action": "save", "commit": True, "draft": self.draft(precision=5)}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(request) as response:
+                saved = json.load(response)
+            self.assertTrue(saved["ok"])
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/workspace") as response:
+                loaded = json.load(response)
+            self.assertEqual(loaded["workspace"]["draft"]["precision"], 5)
+            empty = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/workspace",
+                data=json.dumps({"action": "save", "draft": {"step": "welcome", "precision": 4, "state": {}}}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(empty) as response:
+                rejected = json.load(response)
+            self.assertFalse(rejected["ok"])
+            self.assertIn("not saved", rejected["error"])
+            damaged = os.path.join(self.directory.name, "workspace.json")
+            with open(damaged, "w", encoding="utf-8") as handle:
+                handle.write("{not json")
+            with self.assertRaises(urllib.error.HTTPError):
+                urllib.request.urlopen(
+                    urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/workspace",
+                        data=b"{not json",
+                        headers={"Content-Type": "application/json"},
+                    )
+                )
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/workspace") as response:
+                unreadable = json.load(response)
+            self.assertFalse(unreadable["ok"])
+            refused = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/workspace",
+                data=json.dumps({"action": "save", "draft": self.draft()}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(refused) as response:
+                blocked = json.load(response)
+            self.assertFalse(blocked["ok"])
+            with open(damaged, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "{not json")
+        finally:
+            server.shutdown()
+            server.server_close()
 
 
 class ServerTests(unittest.TestCase):

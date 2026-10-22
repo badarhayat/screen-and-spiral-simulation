@@ -7,54 +7,71 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%238d3f1c'/%3E%3Cpath d='M8 24c3-7 6-11 8-11s5 4 8 11' fill='none' stroke='%23fffdf8' stroke-width='2'/%3E%3C/svg%3E">
   <style>
     :root {
-      --bg: #f3efe6;
-      --ink: #1e1a15;
-      --muted: #5e564c;
-      --line: #e3d9c9;
-      --card: #fffdf8;
-      --accent: #8d3f1c;
-      --accent-dark: #6d2e12;
-      --soft: #f7f1e6;
-      --good: #1d6a43;
+      --bg: #e7edf1;
+      --ink: #15202b;
+      --muted: #526170;
+      --line: #d5dee6;
+      --card: #fbfcfd;
+      --accent: #0f6e6e;
+      --accent-dark: #0b5555;
+      --soft: #eef4f6;
+      --good: #146c43;
       --warn: #8a5a10;
       --warn-bg: #fff6e4;
       --bad: #8d2c2c;
       --bad-bg: #fdecec;
-      --shadow: 0 12px 30px rgba(60, 40, 20, 0.06);
+      --shadow: 0 10px 28px rgba(21, 32, 43, 0.08);
+      --header: #14202b;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      background: var(--bg);
+      background:
+        radial-gradient(circle at top left, rgba(15, 110, 110, 0.08), transparent 28%),
+        var(--bg);
       color: var(--ink);
       font: 16px/1.5 "Segoe UI", "Helvetica Neue", sans-serif;
     }
-    header, main { width: min(980px, calc(100% - 32px)); margin: 0 auto; }
-    header { padding: 32px 0 8px; }
+    .topbar {
+      background: linear-gradient(180deg, #101920 0%, #1a2b38 100%);
+      color: #f7f4ee;
+      border-bottom: 4px solid #c47a3a;
+    }
+    .topbar-inner, main { width: min(1100px, calc(100% - 32px)); margin: 0 auto; }
+    .topbar-inner { padding: 28px 0 22px; display: flex; justify-content: space-between; gap: 24px; align-items: flex-end; }
     .kicker {
       margin: 0;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       font-size: 12px;
-      color: var(--accent);
+      color: #e0b07a;
       font-weight: 700;
     }
-    h1 { font-family: Georgia, "Iowan Old Style", serif; font-size: 40px; line-height: 1.1; margin: 6px 0; font-weight: 600; }
-    .lede { margin: 0; max-width: 68ch; color: var(--muted); }
-    nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0; }
+    h1 { font-family: Georgia, "Iowan Old Style", serif; font-size: 40px; line-height: 1.05; margin: 4px 0; font-weight: 600; }
+    .lede { margin: 0; max-width: 62ch; color: #c5d0d8; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; justify-content: flex-end; }
+    .toolbar label { color: #d5dee6; min-width: 140px; }
+    .toolbar label.file-button { color: var(--accent-dark); min-width: 0; background: white; }
+    .save-status { margin: 0; font-size: 13px; font-weight: 700; align-self: center; }
+    .save-status.saved { color: #b7e4c7; }
+    .save-status.saving { color: #f3d19a; }
+    .save-status.failed { color: #ffc9c9; }
+    #save-detail { margin: 0; color: #d7c4ae; font-size: 12px; max-width: 36ch; align-self: center; }
+    nav { display: flex; gap: 8px; margin: 18px 0; overflow-x: auto; padding-bottom: 4px; }
     nav button {
       border: 1px solid var(--line);
-      background: transparent;
+      background: white;
       color: var(--muted);
       border-radius: 999px;
-      padding: 4px 10px;
+      padding: 6px 12px;
       font: inherit;
       font-size: 13px;
+      white-space: nowrap;
     }
-    nav button.current { background: var(--ink); color: white; border-color: var(--ink); }
+    nav button.current { background: var(--accent); color: white; border-color: var(--accent); }
     nav button { cursor: pointer; }
     nav button:disabled { opacity: 0.45; cursor: default; }
-    button.back { background: var(--ink); color: white; border-color: var(--ink); font-weight: 700; }
+    button.back { background: var(--header); color: white; border-color: var(--header); font-weight: 700; }
     .results-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 16px; }
     .card {
       background: var(--card);
@@ -78,9 +95,15 @@
       padding: 10px 16px;
       cursor: pointer;
     }
-    button.secondary, .file-button { background: transparent; color: var(--accent-dark); }
+    button.secondary, .file-button { background: white; color: var(--accent-dark); }
     button.ghost { background: transparent; color: var(--muted); border-color: var(--line); padding: 8px 12px; }
+    button.danger { background: white; color: var(--bad); border-color: #e4b4b4; }
+    button.danger:hover { background: var(--bad-bg); }
     button:disabled { opacity: 0.6; cursor: wait; }
+    button:focus-visible, input:focus-visible, select:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
     .choice-grid { display: grid; gap: 10px; }
     .choice {
       text-align: left;
@@ -123,17 +146,41 @@
     .params div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 4px 0; }
     .params span { color: var(--muted); }
     .note { color: var(--muted); font-size: 14px; }
+    .chart-card { margin: 8px 0 18px; }
+    .chart-card figcaption { font-weight: 700; margin-bottom: 6px; }
+    .chart-card svg { width: 100%; height: auto; background: white; border: 1px solid var(--line); border-radius: 12px; }
+    .chart-label, .chart-value { font-size: 12px; fill: var(--ink); }
     @media (max-width: 720px) {
       h1 { font-size: 32px; }
+      .topbar-inner { flex-direction: column; align-items: stretch; }
+      .toolbar { justify-content: flex-start; }
       .entry, .entry.minerals, .two, .params { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <p class="kicker">Mineral processing</p>
-    <h1>Spiral concentrator</h1>
-    <p class="lede">A size-density partition model after R.P. King, Chapter 7. The same equations work for any minerals you enter. Questions come one step at a time.</p>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div>
+        <p class="kicker">Mineral processing</p>
+        <h1>Spiral concentrator</h1>
+        <p class="lede">A size-density partition model after R.P. King, Chapter 7. The same equations work for any minerals you enter. Questions come one step at a time.</p>
+      </div>
+      <div class="toolbar">
+        <p id="save-status" class="save-status saving" role="status">Saving…</p>
+        <p id="save-detail"></p>
+        <label>Decimal precision
+          <select id="precision">
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <button class="secondary" type="button" id="export-backup">Export backup</button>
+        <label class="file-button">Import backup<input id="import-backup" type="file" accept="application/json,.json" hidden></label>
+        <button class="danger" type="button" id="discard">Discard changes</button>
+        <button class="danger" type="button" id="reset-simulation">Reset simulation</button>
+      </div>
+    </div>
   </header>
   <main>
     <nav id="nav" aria-label="Steps"></nav>
@@ -147,6 +194,14 @@
     let busy = false;
     let resultFingerprint = "";
     let resultAdjustKey = "";
+    let decimals = 4;
+    let autosaveEnabled = false;
+    let suppressSave = false;
+    let workspaceOnDisk = false;
+    let pendingCommit = false;
+    let saveTimer = null;
+    let saveGeneration = 0;
+    let activeSave = Promise.resolve();
     const visited = new Set(["welcome"]);
     const trail = ["welcome"];
 
@@ -198,22 +253,24 @@
     }
 
     function fmt(value) {
-      if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
-      return Number(value).toFixed(2);
+      if (value === null || value === undefined || value === "") return "n/a";
+      const number = Number(value);
+      if (!Number.isFinite(number)) return "n/a";
+      return number.toFixed(decimals);
     }
 
     function draw() {
-      document.getElementById("nav").innerHTML = steps.map(([id, label]) => {
-        const hidden = id === "plant" && !state.calibrate;
-        if (hidden) return "";
+      const visibleSteps = steps.filter(([id]) => !(id === "plant" && !state.calibrate));
+      document.getElementById("nav").innerHTML = visibleSteps.map(([id, label], index) => {
         const current = id === step;
         const canOpen = !current && (visited.has(id) || (id === "results" && result));
-        return `<button type="button" class="${current ? "current" : ""}" ${canOpen ? `data-nav="${id}"` : "disabled"}>${esc(label)}</button>`;
+        return `<button type="button" class="${current ? "current" : ""}" ${current ? 'aria-current="step"' : ""} ${canOpen ? `data-nav="${id}"` : "disabled"}>${index + 1}. ${esc(label)}</button>`;
       }).join("");
       const screen = document.getElementById("screen");
       screen.innerHTML = screens[step]();
       bind();
       window.scrollTo(0, 0);
+      scheduleSave(false);
     }
 
     function noticeHtml() {
@@ -225,6 +282,45 @@
 
     function errorHtml(message) {
       return `<div class="banner bad">${esc(message)}</div>`;
+    }
+
+    function yieldChart(products) {
+      const colors = { concentrate: "#0f6e6e", middlings: "#c47a3a", tails: "#5c6b7a" };
+      const rows = products.map((product) => ({
+        label: product.label,
+        value: Number(result.yields[product.key]) || 0,
+        color: colors[product.key] || "#0f6e6e"
+      }));
+      return barChart("Mass yield", rows, "%");
+    }
+
+    function recoveryChart(products) {
+      const colors = { concentrate: "#0f6e6e", middlings: "#c47a3a", tails: "#5c6b7a" };
+      const rows = [];
+      result.minerals.forEach((mineral) => {
+        products.forEach((product) => {
+          rows.push({
+            label: mineral.name + " to " + product.label,
+            value: Number(mineral.recoveries[product.key]) || 0,
+            color: colors[product.key] || "#0f6e6e"
+          });
+        });
+      });
+      return barChart("Mineral recovery", rows, "%");
+    }
+
+    function barChart(title, rows, unit) {
+      const width = 680;
+      const height = 26 * Math.max(rows.length, 1) + 16;
+      const max = Math.max(1, ...rows.map((row) => row.value));
+      const bars = rows.map((row, index) => {
+        const y = 12 + index * 26;
+        const bar = Math.max(0, (row.value / max) * 360);
+        return `<text class="chart-label" x="8" y="${y + 14}">${esc(row.label)}</text>
+          <rect x="210" y="${y}" width="${bar.toFixed(2)}" height="16" rx="3" fill="${row.color}"></rect>
+          <text class="chart-value" x="${218 + bar}" y="${y + 13}">${esc(fmt(row.value))}${esc(unit)}</text>`;
+      }).join("");
+      return `<figure class="chart-card"><figcaption>${esc(title)}</figcaption><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${esc(title)}">${bars}</svg></figure>`;
     }
 
     const screens = {
@@ -240,7 +336,7 @@
           <div class="actions">
             <label class="file-button">Load a saved session<input id="file" type="file" accept="application/json,.json" hidden></label>
           </div>
-          ${result ? `<div class="actions"><button class="ghost new-simulation" type="button">New simulation</button></div>` : ""}
+          ${result ? `<div class="actions"><button class="danger new-simulation" type="button">New simulation</button></div>` : ""}
           <p id="error"></p>`;
       },
       sizes() {
@@ -442,7 +538,7 @@
         if (!result) return `<h2>No result yet</h2>`;
         const products = result.products;
         const headers = ["Item", "Feed", ...products.map((p) => p.label)];
-        const yieldRow = ["Mass yield %", "100.00", ...products.map((p) => fmt(result.yields[p.key]))];
+        const yieldRow = ["Mass yield %", fmt(100), ...products.map((p) => fmt(result.yields[p.key]))];
         const rows = [yieldRow];
         if (result.rates_tph) {
           rows.push(["Solids t/h", fmt(result.rates_tph.feed), ...products.map((p) => fmt(result.rates_tph[p.key]))]);
@@ -451,7 +547,7 @@
           mineral.name, fmt(mineral.feed_grade), ...products.map((p) => fmt(mineral.grades[p.key]))
         ]);
         const recoveryRows = result.minerals.map((mineral) => [
-          mineral.name, mineral.feed_grade > 0 ? "100.00" : "n/a", ...products.map((p) => fmt(mineral.recoveries[p.key]))
+          mineral.name, mineral.feed_grade > 0 ? fmt(100) : "n/a", ...products.map((p) => fmt(mineral.recoveries[p.key]))
         ]);
         const sizeRows = result.sizes.map((size) => [
           size.label, fmt(size.feed), ...products.map((p) => fmt(size.distribution[p.key]))
@@ -464,7 +560,7 @@
           return [mineral.name, fmt(mineral.balance.feed), ...products.map((p) => fmt(mineral.balance[p.key])), fmt(produced)];
         });
         const totalProduced = products.reduce((sum, p) => sum + (result.balance_total[p.key] || 0), 0);
-        balanceRows.push(["TOTAL", "100.00", ...products.map((p) => fmt(result.balance_total[p.key])), fmt(totalProduced)]);
+        balanceRows.push(["TOTAL", fmt(100), ...products.map((p) => fmt(result.balance_total[p.key])), fmt(totalProduced)]);
         const fitted = result.parameter_source === "fitted";
         const bannerClass = fitted ? "good" : "warn";
         const params = result.parameters;
@@ -497,7 +593,7 @@
         return `
           <div class="results-toolbar">
             <button class="back back-step" type="button">← Back</button>
-            <button class="ghost new-simulation" type="button">New simulation</button>
+            <button class="danger new-simulation" type="button">New simulation</button>
           </div>
           ${stale ? `<div class="banner warn">These are the previous results. They stay as they are until you run the simulation again.</div>` : ""}
           <div class="banner ${bannerClass}">${esc(result.source_summary)}</div>
@@ -507,6 +603,9 @@
           <h2>Results</h2>
           ${changeNote ? `<div class="banner good">${esc(changeNote)}</div>` : ""}
           <div class="yields">${products.map((p) => `<article class="yield"><p>${esc(p.label)}</p><strong>${fmt(result.yields[p.key])}%</strong><small>${esc(yieldHint(p.key, three, result.dense_is_concentrate))}</small></article>`).join("")}</div>
+          ${yieldChart(products)}
+          ${recoveryChart(products)}
+          <p class="note">Decimal precision changes how numbers are shown. It does not change the mass balance.</p>
           <h3>Mass yield</h3>
           ${table(headers, rows)}
           <h3>Grade of each mineral, mass %</h3>
@@ -556,7 +655,7 @@
             <button class="back back-step" type="button">← Back</button>
             <button type="button" id="rerun">Run again</button>
             <button class="secondary" type="button" id="download">Download session</button>
-            <button class="ghost new-simulation" type="button">New simulation</button>
+            <button class="danger new-simulation" type="button">New simulation</button>
           </div>
           <p id="error"></p>
           <p class="note">${esc(result.calibration_note)}</p>`;
@@ -613,7 +712,7 @@
       const parts = after.products.map((product) => {
         const oldValue = before.yields[product.key];
         const newValue = after.yields[product.key];
-        if (Math.abs(oldValue - newValue) < 0.005) return `${product.label} stayed at ${fmt(newValue)}%`;
+        if (fmt(oldValue) === fmt(newValue)) return `${product.label} stayed at ${fmt(newValue)}%`;
         return `${product.label} moved from ${fmt(oldValue)}% to ${fmt(newValue)}%`;
       });
       return parts.join(". ") + ".";
@@ -727,6 +826,7 @@
       resultFingerprint = simulationFingerprint();
       resultAdjustKey = adjustKeyFromResult(value);
       state.adjustDraft = null;
+      scheduleSave(true);
     }
 
     function applySession(session) {
@@ -814,17 +914,192 @@
     function startFresh() {
       const confirmed = window.confirm("Start a new simulation? The feed, settings, and results on this page will be cleared.");
       if (!confirmed) return;
+      resetWorkspace();
+    }
+
+    function resetSimulation() {
+      const confirmed = window.confirm("Reset the simulation? The feed, settings, results, and the saved session on this computer will be cleared.");
+      if (!confirmed) return;
+      resetWorkspace();
+    }
+
+    function snapshot() {
+      return {
+        step,
+        state,
+        result,
+        changeNote,
+        precision: decimals,
+        resultFingerprint,
+        resultAdjustKey,
+        visited: [...visited],
+        trail: trail.slice()
+      };
+    }
+
+    function applyDraft(draft) {
+      Object.assign(state, blankState(), draft.state || {});
+      result = draft.result || null;
+      changeNote = draft.changeNote || "";
+      decimals = draft.precision === 5 ? 5 : 4;
+      resultFingerprint = draft.resultFingerprint || "";
+      resultAdjustKey = draft.resultAdjustKey || "";
+      const precision = document.getElementById("precision");
+      if (precision) precision.value = String(decimals);
+      visited.clear();
+      (draft.visited || ["welcome"]).forEach((id) => visited.add(id));
+      if (result) visited.add("results");
+      trail.length = 0;
+      const restoredTrail = Array.isArray(draft.trail) && draft.trail.length ? draft.trail : [draft.step || "welcome"];
+      restoredTrail.forEach((id) => trail.push(id));
+      step = draft.step && screens[draft.step] ? draft.step : trail[trail.length - 1];
+    }
+
+    function setStatus(label, detail) {
+      const node = document.getElementById("save-status");
+      if (!node) return;
+      const failed = node.classList.contains("failed");
+      if (arguments.length > 1) node.dataset.detail = detail || "";
+      else if (failed) node.dataset.detail = "";
+      node.textContent = label;
+      node.className = "save-status " + (label === "Save failed" ? "failed" : label === "Saving…" ? "saving" : "saved");
+      const extra = document.getElementById("save-detail");
+      if (extra) extra.textContent = node.dataset.detail || "";
+    }
+
+    function scheduleSave(commit) {
+      if (!autosaveEnabled || suppressSave) return;
+      pendingCommit = pendingCommit || Boolean(commit);
+      setStatus("Saving…");
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => { flushSave(); }, 400);
+    }
+
+    function shouldPersist(draft) {
+      if (draft.precision === 5) return true;
+      if (draft.result) return true;
+      if (draft.step && draft.step !== "welcome") return true;
+      const entered = (value) => String(value ?? "").trim() !== "";
+      const current = draft.state || {};
+      if ((current.sizes || []).some((row) => entered(row.d_low) || entered(row.d_high) || entered(row.mass_percent))) return true;
+      if ((current.minerals || []).some((row) => entered(row.name) || entered(row.density))) return true;
+      if (Object.values(current.overall || {}).some(entered)) return true;
+      if (Object.values(current.yields || {}).some(entered)) return true;
+      return false;
+    }
+
+    async function flushSave() {
+      const commit = pendingCommit;
+      pendingCommit = false;
+      const draft = snapshot();
+      const generation = ++saveGeneration;
+      const run = (async () => {
+        if (!shouldPersist(draft) && !workspaceOnDisk) {
+          if (generation === saveGeneration) setStatus("Saved");
+          return;
+        }
+        try {
+          const response = await post("/api/workspace", { action: "save", draft, commit });
+          if (generation !== saveGeneration) return;
+          if (response.workspace && response.workspace.checkpoint) {
+            /* checkpoint stays on disk for Discard changes */
+          }
+          workspaceOnDisk = true;
+          setStatus("Saved");
+        } catch (error) {
+          if (generation !== saveGeneration) return;
+          if (commit) pendingCommit = true;
+          setStatus("Save failed", error.message);
+        }
+      })();
+      activeSave = run;
+      await run;
+    }
+
+    async function settleSaves() {
+      clearTimeout(saveTimer);
+      saveGeneration += 1;
+      try {
+        await activeSave;
+      } catch {
+        /* flushSave already reported the failure */
+      }
+    }
+
+    async function resetWorkspace() {
+      autosaveEnabled = false;
+      await settleSaves();
+      try {
+        await post("/api/workspace", { action: "reset" });
+      } catch (error) {
+        autosaveEnabled = true;
+        setStatus("Save failed", error.message);
+        return;
+      }
       Object.assign(state, blankState());
       result = null;
       resultFingerprint = "";
       resultAdjustKey = "";
       changeNote = "";
+      decimals = 4;
+      const precision = document.getElementById("precision");
+      if (precision) precision.value = "4";
       visited.clear();
       visited.add("welcome");
       trail.length = 0;
       trail.push("welcome");
+      workspaceOnDisk = false;
+      autosaveEnabled = true;
+      suppressSave = true;
       history.pushState({ spiralStep: "welcome", trail: trail.slice() }, "", location.href);
       show("welcome");
+      suppressSave = false;
+      setStatus("Saved", "Simulation reset");
+    }
+
+    async function discardChanges() {
+      const confirmed = window.confirm("Discard changes since the last simulation? The page will return to that checkpoint.");
+      if (!confirmed) return;
+      try {
+        await settleSaves();
+        const response = await post("/api/workspace", { action: "discard" });
+        applyDraft(response.workspace.draft);
+        history.pushState({ spiralStep: step, trail: trail.slice() }, "", location.href);
+        show(step);
+        setStatus("Saved", "Changes discarded");
+      } catch (error) {
+        setStatus("Save failed", error.message);
+        window.alert(error.message);
+      }
+    }
+
+    function exportBackup() {
+      getJson("/api/workspace").then((saved) => {
+        const blob = new Blob([JSON.stringify(saved.workspace || { version: 1, draft: snapshot() }, null, 2)], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "spiral-workspace.json";
+        link.click();
+        URL.revokeObjectURL(link.href);
+      }).catch((error) => setStatus("Save failed", error.message));
+    }
+
+    async function importBackup(file) {
+      if (!file) return;
+      const confirmed = window.confirm("Import this backup? It replaces the session saved on this computer.");
+      if (!confirmed) return;
+      try {
+        const workspace = JSON.parse(await file.text());
+        await settleSaves();
+        const response = await post("/api/workspace", { action: "import", workspace });
+        applyDraft(response.workspace.draft);
+        workspaceOnDisk = true;
+        history.pushState({ spiralStep: step, trail: trail.slice() }, "", location.href);
+        show(step);
+        setStatus("Saved", "Backup imported");
+      } catch (error) {
+        setStatus("Save failed", error.message || "That backup could not be read.");
+      }
     }
 
     function capture() {
@@ -1159,6 +1434,7 @@
     function show(next) {
       step = next;
       draw();
+      scheduleSave(false);
     }
 
     function go(next) {
@@ -1202,8 +1478,63 @@
       }
     });
 
-    history.replaceState({ spiralStep: "welcome", trail: trail.slice() }, "", location.href);
-    show("welcome");
+    document.getElementById("precision").addEventListener("change", (event) => {
+      rememberStep();
+      decimals = event.target.value === "5" ? 5 : 4;
+      draw();
+      scheduleSave(false);
+    });
+    document.getElementById("discard").addEventListener("click", discardChanges);
+    document.getElementById("reset-simulation").addEventListener("click", resetSimulation);
+    document.getElementById("export-backup").addEventListener("click", exportBackup);
+    document.getElementById("import-backup").addEventListener("change", (event) => {
+      importBackup(event.target.files[0]);
+      event.target.value = "";
+    });
+    document.addEventListener("input", (event) => {
+      if (!autosaveEnabled || event.target.id === "precision" || event.target.id === "import-backup" || event.target.id === "file") return;
+      rememberStep();
+      scheduleSave(false);
+    });
+    document.addEventListener("change", (event) => {
+      if (!autosaveEnabled || event.target.id === "precision" || event.target.id === "import-backup") return;
+      rememberStep();
+      scheduleSave(false);
+    });
+    window.addEventListener("pagehide", () => {
+      if (!autosaveEnabled || suppressSave) return;
+      rememberStep();
+      const draft = snapshot();
+      if (!shouldPersist(draft) && !workspaceOnDisk) return;
+      const body = JSON.stringify({ action: "save", draft, commit: pendingCommit });
+      fetch("/api/workspace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true
+      });
+    });
+
+    async function boot() {
+      document.getElementById("screen").innerHTML = `<p class="muted">Loading your saved session…</p>`;
+      try {
+        const saved = await getJson("/api/workspace");
+        if (saved.workspace && saved.workspace.draft) {
+          applyDraft(saved.workspace.draft);
+          workspaceOnDisk = true;
+          setStatus("Saved", "Last session restored");
+        } else {
+          setStatus("Saved");
+        }
+      } catch (error) {
+        setStatus("Save failed", error.message);
+      }
+      autosaveEnabled = true;
+      history.replaceState({ spiralStep: step, trail: trail.slice() }, "", location.href);
+      show(step);
+    }
+
+    boot();
   </script>
 </body>
 </html>

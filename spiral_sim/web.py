@@ -23,6 +23,14 @@ from spiral_sim.model import OperatingConditions, SplitterSettings
 from spiral_sim.report import CALIBRATION_NOTE, SOURCE_SUMMARY
 from spiral_sim.session import Session, session_from_dict, session_to_dict
 from spiral_sim.simulate import PRODUCT_LABELS, SimulationResult, active_products
+from spiral_sim.workspace_store import (
+    WorkspaceError,
+    clear_workspace,
+    discard_to_checkpoint,
+    import_workspace,
+    read_workspace,
+    save_workspace,
+)
 from spiral_sim.targets import match_mass_pulls
 
 
@@ -284,7 +292,12 @@ def build_plant(data: dict, n_products: int, mineral_names: list[str]) -> tuple[
     return plant, notes
 
 
-def _pct(value: float | None, digits: int = 2) -> float | None:
+def _pct(value: float | None, digits: int = 8) -> float | None:
+    """Percent for the page. Extra digits stay available for 4- or 5-place display.
+
+    The partition math itself is unchanged. This only limits how many digits
+    are written into the JSON the browser formats.
+    """
     if value is None:
         return None
     return round(value * 100.0, digits)
@@ -303,7 +316,7 @@ def pack(session: Session, result: SimulationResult, notes: list[str] | None = N
         for label, observed, predicted in fit_report.comparisons:
             gap = None
             if observed is not None and predicted is not None:
-                gap = round((predicted - observed) * 100.0, 2)
+                gap = round((predicted - observed) * 100.0, 8)
             comparisons.append(
                 {
                     "label": label,
@@ -320,9 +333,9 @@ def pack(session: Session, result: SimulationResult, notes: list[str] | None = N
             None
             if session.operating.feed_rate_tph is None
             else {
-                "feed": round(session.operating.feed_rate_tph, 2),
+                "feed": round(session.operating.feed_rate_tph, 8),
                 **{
-                    product: round(session.operating.feed_rate_tph * result.yield_of(product), 2)
+                    product: round(session.operating.feed_rate_tph * result.yield_of(product), 8)
                     for product in products
                 },
             }
@@ -330,7 +343,7 @@ def pack(session: Session, result: SimulationResult, notes: list[str] | None = N
         "minerals": [
             {
                 "name": mineral.name,
-                "density": round(mineral.density, 3),
+                "density": round(mineral.density, 8),
                 "feed_grade": _pct(session.feed.overall_grade(index)),
                 "grades": {
                     product: _pct(result.grade_of(product, index)) for product in products
@@ -339,9 +352,9 @@ def pack(session: Session, result: SimulationResult, notes: list[str] | None = N
                     product: _pct(result.recovery_of(product, index)) for product in products
                 },
                 "balance": {
-                    "feed": round(result.feed_mineral[index] * 100.0, 2),
+                    "feed": round(result.feed_mineral[index] * 100.0, 8),
                     **{
-                        product: round(result.mineral_mass[product][index] * 100.0, 2)
+                        product: round(result.mineral_mass[product][index] * 100.0, 8)
                         for product in products
                     },
                 },
@@ -363,35 +376,35 @@ def pack(session: Session, result: SimulationResult, notes: list[str] | None = N
         ],
         "balance_total": {
             "feed": 100.0,
-            **{product: round(result.total[product] * 100.0, 2) for product in products},
+            **{product: round(result.total[product] * 100.0, 8) for product in products},
         },
         "closure": result.closure_error(),
         "parameters": {
             "curve": session.params.curve,
             "curve_label": session.params.curve_label(),
             "d_ref": session.params.d_ref,
-            "rho50_outer_ref": round(session.params.rho50_outer_ref, 3),
-            "rho50_inner_ref": round(session.params.rho50_inner_ref, 3),
-            "imperfection_ref": round(session.params.imperfection_ref, 3),
-            "n_cut": round(session.params.n_cut, 3),
-            "m_sharp": round(session.params.m_sharp, 3),
-            "bypass_outer_coarse": round(session.params.bypass_outer_coarse * 100.0, 2),
-            "bypass_outer_slime": round(session.params.bypass_outer_slime * 100.0, 2),
-            "d_slime": round(session.params.d_slime, 3),
-            "bypass_inner": round(session.params.bypass_inner * 100.0, 2),
+            "rho50_outer_ref": round(session.params.rho50_outer_ref, 8),
+            "rho50_inner_ref": round(session.params.rho50_inner_ref, 8),
+            "imperfection_ref": round(session.params.imperfection_ref, 8),
+            "n_cut": round(session.params.n_cut, 8),
+            "m_sharp": round(session.params.m_sharp, 8),
+            "bypass_outer_coarse": round(session.params.bypass_outer_coarse * 100.0, 8),
+            "bypass_outer_slime": round(session.params.bypass_outer_slime * 100.0, 8),
+            "d_slime": round(session.params.d_slime, 8),
+            "bypass_inner": round(session.params.bypass_inner * 100.0, 8),
         },
         "splitters": {
-            "outer_opening": round(session.settings.outer_opening, 1),
-            "inner_opening": round(session.settings.inner_opening, 1),
+            "outer_opening": round(session.settings.outer_opening, 8),
+            "inner_opening": round(session.settings.inner_opening, 8),
         },
         "profiles": [
             {
                 "label": label,
-                "size_mm": round(profile.size_mm, 3),
-                "rho50_outer": round(profile.rho50_outer, 3),
-                "ep_outer": round(profile.ep_outer, 3),
-                "rho50_inner": None if profile.rho50_inner is None else round(profile.rho50_inner, 3),
-                "ep_inner": None if profile.ep_inner is None else round(profile.ep_inner, 3),
+                "size_mm": round(profile.size_mm, 8),
+                "rho50_outer": round(profile.rho50_outer, 8),
+                "ep_outer": round(profile.ep_outer, 8),
+                "rho50_inner": None if profile.rho50_inner is None else round(profile.rho50_inner, 8),
+                "ep_inner": None if profile.ep_inner is None else round(profile.ep_inner, 8),
                 "bypass_outer": _pct(profile.bypass_outer),
             }
             for label, profile in zip(result.size_labels, result.profiles)
@@ -582,6 +595,37 @@ def example_payload() -> dict:
     return pack(session, session.run())
 
 
+def workspace_response(payload: dict | None = None) -> dict:
+    """Read or update the on-disk workspace. Model equations are not involved."""
+    if payload is None:
+        try:
+            return {"ok": True, "workspace": read_workspace()}
+        except WorkspaceError as exc:
+            return {"ok": False, "error": str(exc), "workspace": None}
+    action = payload.get("action") or "save"
+    try:
+        if action == "reset":
+            clear_workspace()
+            return {"ok": True, "workspace": None}
+        if action == "discard":
+            return {"ok": True, "workspace": discard_to_checkpoint()}
+        if action == "import":
+            return {"ok": True, "workspace": import_workspace(payload.get("workspace"))}
+        if action == "save":
+            draft = payload.get("draft")
+            return {
+                "ok": True,
+                "workspace": save_workspace(
+                    draft,
+                    commit=bool(payload.get("commit")),
+                    replace=bool(payload.get("replace")),
+                ),
+            }
+    except WorkspaceError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": False, "error": "That save action does not exist."}
+
+
 def make_server(host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServer:
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802 - stdlib handler name
@@ -590,6 +634,8 @@ def make_server(host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServe
                 self._send_page()
             elif path == "/api/example":
                 self._send_json(example_payload())
+            elif path == "/api/workspace":
+                self._send_json(workspace_response())
             else:
                 self._send_json({"ok": False, "error": "That page does not exist."}, 404)
 
@@ -603,6 +649,8 @@ def make_server(host: str = "127.0.0.1", port: int = 8080) -> ThreadingHTTPServe
                     result = rerun_session(payload)
                 elif path == "/api/session":
                     result = run_saved(payload)
+                elif path == "/api/workspace":
+                    result = workspace_response(payload)
                 else:
                     self._send_json({"ok": False, "error": "That action does not exist."}, 404)
                     return

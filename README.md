@@ -16,6 +16,10 @@ python3 -m spiral_sim --web
 
 Then open [http://127.0.0.1:8080](http://127.0.0.1:8080). The page asks for the feed one step at a time, runs the same model as the command-line program, and lets you change the splitters or the cut densities and run again. On the results page, **← Back** returns to the setup and keeps the feed, settings, and results. Open Results again, or use the browser’s Back and Forward buttons, and the same results come back when the inputs are unchanged. **New simulation** asks before it clears them. Leave the terminal open while you use it. Ctrl+C stops the server.
 
+Every change is written to a workspace file after a short pause. Reopening the page, including after the Windows program is closed and started again, restores that file. **Discard changes** returns to the last simulation. **Reset simulation** asks, then deletes the file. **Decimal precision** shows 4 or 5 decimal places. The partition math still uses the full values. Export backup and Import backup copy that same file.
+
+On Windows the file is `%LOCALAPPDATA%\SpiralConcentrator\workspace.json`. On Linux and macOS it is `~/.local/share/SpiralConcentrator/workspace.json`. Set `SPIRAL_WORKSPACE_DIR` to keep it somewhere else. A file that cannot be read is left as it is.
+
 ```bash
 python3 -m spiral_sim --web --port 8080
 ```
@@ -126,7 +130,7 @@ To make an installer later, install [Inno Setup 6](https://jrsoftware.org/isinfo
 ## Tests
 
 ```bash
-python3 -m unittest tests.test_spiral -v
+python3 -m unittest tests.test_spiral tests.test_web -v
 ```
 
 The tests check the 50% and 75% points of both partition curves, mass and mineral closure, heavy-versus-light recovery, coal (light concentrate), a single mineral, two products, splitter direction, target mass pulls, calibration against a synthetic survey, save/load, and the interactive dialogue.
