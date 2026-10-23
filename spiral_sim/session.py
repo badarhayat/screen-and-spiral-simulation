@@ -63,6 +63,23 @@ def _filter_fields(cls, data: dict):
     return cls(**{key: value for key, value in data.items() if key in known})
 
 
+def _entered_percents(feed_data: dict) -> list[list[float]] | None:
+    """Entered mass percents, or None when an older file does not have them."""
+    raw = feed_data.get("entered_composition_percent")
+    composition = feed_data.get("composition") or []
+    if not raw or not isinstance(raw, list) or len(raw) != len(composition):
+        return None
+    cleaned: list[list[float]] = []
+    for row, model in zip(raw, composition):
+        if not isinstance(row, list) or len(row) != len(model):
+            return None
+        try:
+            cleaned.append([float(value) for value in row])
+        except (TypeError, ValueError):
+            return None
+    return cleaned
+
+
 def session_to_dict(session: Session) -> dict:
     """Plain data suitable for JSON. Dataclasses are expanded."""
     return {
@@ -78,6 +95,7 @@ def session_to_dict(session: Session) -> dict:
             "size_classes": [asdict(size_class) for size_class in session.feed.size_classes],
             "minerals": [asdict(mineral) for mineral in session.feed.minerals],
             "composition": session.feed.composition,
+            "entered_composition_percent": session.feed.entered_composition_percent,
         },
         "operating": asdict(session.operating),
         "parameters": asdict(session.params),
@@ -102,6 +120,7 @@ def session_from_dict(data: dict) -> Session:
         size_classes=[_filter_fields(SizeClass, item) for item in feed_data["size_classes"]],
         minerals=[_filter_fields(Mineral, item) for item in feed_data["minerals"]],
         composition=feed_data["composition"],
+        entered_composition_percent=_entered_percents(feed_data),
     )
     plant = None
     if data.get("plant"):

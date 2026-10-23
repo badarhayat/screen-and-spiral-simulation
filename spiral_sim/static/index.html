@@ -559,8 +559,14 @@
           const produced = products.reduce((sum, p) => sum + (mineral.balance[p.key] || 0), 0);
           return [mineral.name, fmt(mineral.balance.feed), ...products.map((p) => fmt(mineral.balance[p.key])), fmt(produced)];
         });
+        if (result.unassigned) {
+          const unassigned = result.unassigned;
+          const produced = products.reduce((sum, p) => sum + (unassigned[p.key] || 0), 0);
+          balanceRows.push(["Unassigned solids", fmt(unassigned.feed), ...products.map((p) => fmt(unassigned[p.key])), fmt(produced)]);
+        }
         const totalProduced = products.reduce((sum, p) => sum + (result.balance_total[p.key] || 0), 0);
         balanceRows.push(["TOTAL", fmt(100), ...products.map((p) => fmt(result.balance_total[p.key])), fmt(totalProduced)]);
+        const showsNormalized = result.minerals.some((mineral) => mineral.normalized_proportion != null);
         const fitted = result.parameter_source === "fitted";
         const bannerClass = fitted ? "good" : "warn";
         const params = result.parameters;
@@ -609,7 +615,11 @@
           <h3>Mass yield</h3>
           ${table(headers, rows)}
           <h3>Grade of each mineral, mass %</h3>
+          <p class="note">The feed column is the grade that was entered. The simulation does not replace it.</p>
           ${table(headers, gradeRows)}
+          ${showsNormalized ? `<h3>Normalized proportion of the assayed minerals</h3>
+          <p class="note">These shares sum to 100%. The partition uses them internally. They are not the entered feed grades, and they are not written back over the grades you supplied.</p>
+          ${table(["Mineral", "Normalized proportion, mass %"], result.minerals.map((mineral) => [mineral.name, fmt(mineral.normalized_proportion)]))}` : ""}
           <h3>Recovery of each mineral, %</h3>
           ${table(headers, recoveryRows)}
           <h3>Size distribution of each product, mass % of that product</h3>
@@ -618,6 +628,7 @@
           <h3>Where each size class reports, % of that class</h3>
           ${table(["Size class", ...products.map((p) => p.label)], destRows)}
           <h3>Mineral balance, mass per 100 mass units of feed</h3>
+          ${result.unassigned ? `<p class="note">Unassigned solids is the part of the feed that was not included in the entered mineral grades. It is not an extra mineral.</p>` : ""}
           ${table(["Mineral", "Feed", ...products.map((p) => p.label), "Sum"], balanceRows)}
           <p class="note">${result.closure < 1e-6 ? "Balance closure: closed." : "Balance gap: " + result.closure}</p>
           <h3>Partition parameters used</h3>
@@ -841,12 +852,26 @@
         density: numText(mineral.density)
       }));
       state.compositionMode = "by_size";
-      state.bySize = (feed.composition || []).map((row) => {
+      const enteredGrades = feed.entered_composition_percent;
+      state.bySize = (enteredGrades || feed.composition || []).map((row) => {
         const grades = {};
-        feed.minerals.forEach((mineral, index) => { grades[mineral.name] = percentText(row[index]); });
+        feed.minerals.forEach((mineral, index) => {
+          grades[mineral.name] = enteredGrades ? numText(row[index]) : percentText(row[index]);
+        });
         return grades;
       });
       state.overall = {};
+      if (enteredGrades && enteredGrades.length) {
+        const uniform = feed.minerals.every((_mineral, index) =>
+          enteredGrades.every((row) => Number(row[index]) === Number(enteredGrades[0][index]))
+        );
+        if (uniform) {
+          state.compositionMode = "overall";
+          feed.minerals.forEach((mineral, index) => {
+            state.overall[mineral.name] = numText(enteredGrades[0][index]);
+          });
+        }
+      }
       const operating = session.operating || {};
       state.feedRate = operating.feed_rate_tph == null ? "" : numText(operating.feed_rate_tph);
       state.solids = operating.pct_solids == null ? "" : numText(operating.pct_solids);

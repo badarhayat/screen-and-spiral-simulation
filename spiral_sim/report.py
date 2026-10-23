@@ -49,6 +49,34 @@ def _pct(value: float | None, digits: int = 2) -> str:
     return f"{value * 100:.{digits}f}"
 
 
+def _print_percent(percent: float, precise: bool) -> str:
+    """Format a number that is already in mass percent."""
+    if not precise:
+        return f"{percent:.2f}"
+    absolute = abs(percent)
+    if absolute >= 10:
+        return f"{percent:.4f}".rstrip("0").rstrip(".")
+    if absolute >= 0.01:
+        return f"{percent:.4f}".rstrip("0").rstrip(".")
+    text = f"{percent:.6f}".rstrip("0").rstrip(".")
+    return text if text not in {"", "-", "-0"} else "0"
+
+
+def _shown_feed_grade(session: Session, index: int) -> tuple[float, float, float | None]:
+    """Scale, entered feed percent, and normalized percent when they differ.
+
+    The normalized percent is None when the report should keep the model
+    grade, which is what older sessions and the command-line dialogue store.
+    """
+    feed = session.feed
+    model_percent = feed.overall_grade(index) * 100.0
+    entered = feed.entered_overall_percent(index)
+    scale = feed.display_grade_scale(index)
+    if entered is None or scale == 1.0:
+        return 1.0, model_percent, None
+    return scale, entered, model_percent
+
+
 def _num(value: float | None, digits: int = 2) -> str:
     if value is None:
         return "n/a"
@@ -154,10 +182,27 @@ def render(session: Session, result: SimulationResult) -> str:
         lines.append("  Dense stream: tails (inner product). Concentrate is the light outer product.")
     lines.append(f"  Products: {len(result.products)}")
     lines.append("  Minerals:")
+    showed_normalized = False
     for index, mineral in enumerate(session.feed.minerals):
-        grade = session.feed.overall_grade(index)
+        _scale, feed_percent, normalized = _shown_feed_grade(session, index)
+        if normalized is None:
+            lines.append(
+                f"    {mineral.name}: {mineral.density:.3f} g/cm3, "
+                f"{_pct(session.feed.overall_grade(index))}% of feed"
+            )
+        else:
+            showed_normalized = True
+            lines.append(
+                f"    {mineral.name}: {mineral.density:.3f} g/cm3, "
+                f"{_print_percent(feed_percent, True)}% entered feed grade"
+            )
+            lines.append(
+                "      normalized proportion of the assayed minerals: "
+                f"{_print_percent(normalized, True)}% (not the entered grade)"
+            )
+    if showed_normalized:
         lines.append(
-            f"    {mineral.name}: {mineral.density:.3f} g/cm3, {_pct(grade)}% of feed"
+            "  Entered feed grades are unchanged. Normalized proportions are used only by the partition."
         )
     lines.append("")
 
@@ -178,12 +223,22 @@ def render(session: Session, result: SimulationResult) -> str:
 
     # Grades
     grade_rows = []
+    grade_uses_entered = False
     for index, name in enumerate(result.mineral_names):
-        row = [name, _pct(session.feed.overall_grade(index))]
-        for product in result.products:
-            row.append(_pct(result.grade_of(product, index)))
+        scale, feed_percent, normalized = _shown_feed_grade(session, index)
+        if normalized is None:
+            row = [name, _pct(session.feed.overall_grade(index))]
+            for product in result.products:
+                row.append(_pct(result.grade_of(product, index)))
+        else:
+            grade_uses_entered = True
+            row = [name, _print_percent(feed_percent, True)]
+            for product in result.products:
+                row.append(_print_percent(result.grade_of(product, index) * scale * 100.0, True))
         grade_rows.append(row)
     lines.append("Grade of each mineral, mass %")
+    if grade_uses_entered:
+        lines.append("The feed column is the entered feed grade. It is not the normalized proportion.")
     lines.append(format_table(_product_headers(result, include_feed=True), grade_rows))
     lines.append("")
 
@@ -226,21 +281,58 @@ def render(session: Session, result: SimulationResult) -> str:
     # Mineral balance per 100 units
     balance_headers = ["Mineral", "Feed"] + [PRODUCT_LABELS[p] for p in result.products] + ["Sum"]
     balance_rows = []
+    assigned_feed = 0.0
+    assigned_products = [0.0 for _product in result.products]
+    shown_grades = [_shown_feed_grade(session, index) for index in range(len(result.mineral_names))]
+    balance_is_entered = any(normalized is not None for _scale, _percent, normalized in shown_grades)
     for index, name in enumerate(result.mineral_names):
-        feed_mass = result.feed_mineral[index] * 100.0
-        produced = [result.mineral_mass[product][index] * 100.0 for product in result.products]
-        row = [name, f"{feed_mass:.2f}"]
-        row.extend(f"{value:.2f}" for value in produced)
-        row.append(f"{sum(produced):.2f}")
-        balance_rows.append(row)
+        scale, feed_percent, _normalized = shown_grades[index]
+        if not balance_is_entered:
+            feed_mass = result.feed_mineral[index] * 100.0
+            produced = [result.mineral_mass[product][index] * 100.0 for product in result.products]
+            feed_text = f"{feed_mass:.2f}"
+            produced_text = [f"{value:.2f}" for value in produced]
+            sum_text = f"{sum(produced):.2f}"
+        else:
+            feed_mass = feed_percent
+            produced = [
+                result.mineral_mass[product][index] * 100.0 * scale for product in result.products
+            ]
+            feed_text = _print_percent(feed_mass, True)
+            produced_text = [_print_percent(value, True) for value in produced]
+            sum_text = _print_percent(sum(produced), True)
+        assigned_feed += feed_mass
+        for position, value in enumerate(produced):
+            assigned_products[position] += value
+        balance_rows.append([name, feed_text, *produced_text, sum_text])
     feed_total = 100.0
     produced_totals = [result.total[product] * 100.0 for product in result.products]
+    if balance_is_entered and abs(feed_total - assigned_feed) > 0.05:
+        unassigned_products = [
+            total - assigned for total, assigned in zip(produced_totals, assigned_products)
+        ]
+        balance_rows.append(
+            [
+                "Unassigned solids",
+                _print_percent(feed_total - assigned_feed, True),
+                *[_print_percent(value, True) for value in unassigned_products],
+                _print_percent(sum(unassigned_products), True),
+            ]
+        )
+        lines_note = (
+            "Unassigned solids is the part of the feed that was not included in the entered grades. "
+            "It is not an extra mineral."
+        )
+    else:
+        lines_note = ""
     total_row = ["TOTAL", f"{feed_total:.2f}"]
     total_row.extend(f"{value:.2f}" for value in produced_totals)
     total_row.append(f"{sum(produced_totals):.2f}")
     balance_rows.append(total_row)
     lines.append("Mineral and mass balance, mass per 100 mass units of feed")
     lines.append(format_table(balance_headers, balance_rows))
+    if lines_note:
+        lines.append(lines_note)
     gap = result.closure_error() * 100.0
     if gap < 1e-6:
         lines.append("Balance closure: closed.")

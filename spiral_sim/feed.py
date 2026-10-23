@@ -43,6 +43,10 @@ class Feed:
     size_classes: list[SizeClass] = field(default_factory=list)
     minerals: list[Mineral] = field(default_factory=list)
     composition: list[list[float]] = field(default_factory=list)
+    # Mass percent of each mineral as supplied, before any scaling to 100%.
+    # ``composition`` remains the proportions the partition uses, and those
+    # rows still sum to 1. None means this file has only the model proportions.
+    entered_composition_percent: list[list[float]] | None = None
 
     def validate(self) -> list[str]:
         """Return human-readable problems. An empty list means the feed is usable."""
@@ -84,6 +88,31 @@ class Feed:
             sc.mass_fraction * self.composition[i][mineral_index]
             for i, sc in enumerate(self.size_classes)
         )
+
+    def entered_overall_percent(self, mineral_index: int) -> float | None:
+        """Feed grade in mass percent, as supplied. None for an older session."""
+        rows = self.entered_composition_percent
+        if not rows:
+            return None
+        return sum(
+            size_class.mass_fraction * rows[i][mineral_index]
+            for i, size_class in enumerate(self.size_classes)
+        )
+
+    def display_grade_scale(self, mineral_index: int) -> float:
+        """Convert a model grade into the entered feed grade's units.
+
+        The partition still runs on proportions that sum to 1. Multiplying
+        a model grade by this scale reports it against the grade that was
+        typed, without changing those proportions.
+        """
+        entered = self.entered_overall_percent(mineral_index)
+        if entered is None:
+            return 1.0
+        model_percent = self.overall_grade(mineral_index) * 100.0
+        if model_percent <= 1e-12 or abs(entered - model_percent) <= 0.05:
+            return 1.0
+        return entered / model_percent
 
     def component_masses(self) -> list[list[float]]:
         """Mass of each (size, mineral) per unit of feed solids."""
