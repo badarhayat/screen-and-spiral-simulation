@@ -79,11 +79,16 @@ def _optional_percent(value, label: str) -> float | None:
     return _percent(value, label)
 
 
-def _fractions_from_percents(percents: list[float | None], label: str) -> tuple[list[float], list[str]]:
-    """Turn a row of percents into fractions that sum to 1.
+def _fractions_from_percents(
+    percents: list[float | None], label: str
+) -> tuple[list[float], list[float], list[str]]:
+    """Turn a row of percents into model fractions and the entered grades.
 
-    One blank, and only in the last position, becomes the remainder.
-    A complete row that does not add up to 100 is scaled.
+    One blank, and only in the last position, becomes the remainder. That
+    remainder is part of what was asked for, so it is stored with the entered
+    grades. A complete row that does not add up to 100 is not written back
+    over those grades. The model still needs proportions that sum to 1, and
+    those normalized proportions are returned separately.
     """
     notes: list[str] = []
     if not percents:
@@ -99,17 +104,23 @@ def _fractions_from_percents(percents: list[float | None], label: str) -> tuple[
         if used > 100.05:
             raise ValueError(f"The {label} already adds up to more than 100%.")
         numbers[-1] = max(0.0, 100.0 - used)
-    total = sum(value or 0.0 for value in numbers)
+    entered = [float(value or 0.0) for value in numbers]
+    total = sum(entered)
     if total <= 0:
         raise ValueError(f"The {label} adds up to zero.")
+    model_percents = list(entered)
     if abs(total - 100.0) > 0.05:
-        notes.append(f"The {label} added up to {total:.2f}% and was scaled to 100%.")
-        numbers = [100.0 * (value or 0.0) / total for value in numbers]
+        shown = f"{total:.4f}" if total < 10 else f"{total:.2f}"
+        notes.append(
+            f"The {label} add up to {shown}%, not 100%. The entered grades are unchanged. "
+            "The partition uses their normalized proportion of the assayed minerals."
+        )
+        model_percents = [100.0 * value / total for value in entered]
     try:
-        fractions = normalize([float(value or 0.0) for value in numbers])
+        fractions = normalize(model_percents)
     except ValueError as exc:
         raise ValueError(f"The {label} could not be used.") from exc
-    return fractions, notes
+    return fractions, entered, notes
 
 
 def build_feed(data: dict) -> tuple[Feed, list[str]]:
@@ -162,30 +173,34 @@ def build_feed(data: dict) -> tuple[Feed, list[str]]:
 
     if len(minerals) == 1:
         composition = [[1.0] for _row in parsed]
+        entered_rows = [[100.0] for _row in parsed]
     elif data.get("composition_mode") == "by_size":
         rows = data.get("grades_by_size") or []
         if len(rows) != len(parsed):
             raise ValueError("Enter a mineral analysis for every size class.")
         composition = []
+        entered_rows = []
         for index, row in enumerate(rows, start=1):
             percents = [
                 _optional_percent(row.get(mineral.name), f"{mineral.name} in size class {index}")
                 for mineral in minerals
             ]
-            fractions, grade_notes = _fractions_from_percents(
+            fractions, entered, grade_notes = _fractions_from_percents(
                 percents, f"grades in size class {index}"
             )
             notes.extend(grade_notes)
             composition.append(fractions)
+            entered_rows.append(entered)
     else:
         overall = data.get("overall_grades") or {}
         percents = [
             _optional_percent(overall.get(mineral.name), f"overall grade of {mineral.name}")
             for mineral in minerals
         ]
-        fractions, grade_notes = _fractions_from_percents(percents, "overall mineral grades")
+        fractions, entered, grade_notes = _fractions_from_percents(percents, "overall mineral grades")
         notes.extend(grade_notes)
         composition = [list(fractions) for _row in parsed]
+        entered_rows = [list(entered) for _row in parsed]
 
     feed = Feed(
         size_classes=[
@@ -194,6 +209,7 @@ def build_feed(data: dict) -> tuple[Feed, list[str]]:
         ],
         minerals=minerals,
         composition=composition,
+        entered_composition_percent=entered_rows,
     )
     problems = feed.validate()
     if problems:
@@ -303,6 +319,70 @@ def _pct(value: float | None, digits: int = 8) -> float | None:
     return round(value * 100.0, digits)
 
 
+def _packed_minerals(session: Session, result: SimulationResult, products: list[str]) -> list[dict]:
+    """Feed grades stay as entered. Normalized shares are a separate field.
+
+    Product grades and mineral masses are scaled only for display, so
+    grade = recovery × entered feed grade / yield still holds. Yields and
+    recoveries stay on the partition, which needs proportions that sum to 1.
+    """
+    packed: list[dict] = []
+    for index, mineral in enumerate(session.feed.minerals):
+        entered = session.feed.entered_overall_percent(index)
+        scale = session.feed.display_grade_scale(index)
+        if entered is None:
+            feed_grade = _pct(session.feed.overall_grade(index))
+            feed_mass = result.feed_mineral[index] * 100.0
+        else:
+            feed_grade = round(entered, 8)
+            feed_mass = entered
+        item = {
+            "name": mineral.name,
+            "density": round(mineral.density, 8),
+            "feed_grade": feed_grade,
+            "grades": {
+                product: _pct(result.grade_of(product, index) * scale) for product in products
+            },
+            "recoveries": {
+                product: _pct(result.recovery_of(product, index)) for product in products
+            },
+            "balance": {
+                "feed": round(feed_mass, 8),
+                **{
+                    product: round(result.mineral_mass[product][index] * 100.0 * scale, 8)
+                    for product in products
+                },
+            },
+        }
+        if scale != 1.0:
+            item["normalized_proportion"] = _pct(session.feed.overall_grade(index))
+        packed.append(item)
+    return packed
+
+
+def _unassigned_solids(session: Session, result: SimulationResult, products: list[str]) -> dict | None:
+    """Mass the entered grades do not account for. Not an extra mineral."""
+    minerals = _packed_minerals(session, result, products)
+    if any(session.feed.entered_overall_percent(index) is None for index in range(len(minerals))):
+        return None
+    if not minerals:
+        return None
+    assigned_feed = sum(item["balance"]["feed"] for item in minerals)
+    if abs(100.0 - assigned_feed) <= 0.05:
+        return None
+    return {
+        "label": "Unassigned solids",
+        "feed": round(100.0 - assigned_feed, 8),
+        **{
+            product: round(
+                result.total[product] * 100.0 - sum(item["balance"][product] for item in minerals),
+                8,
+            )
+            for product in products
+        },
+    }
+
+
 def pack(session: Session, result: SimulationResult, notes: list[str] | None = None, fit_report=None) -> dict:
     """JSON the page can render without parsing the text report."""
     products = list(result.products)
@@ -340,27 +420,8 @@ def pack(session: Session, result: SimulationResult, notes: list[str] | None = N
                 },
             }
         ),
-        "minerals": [
-            {
-                "name": mineral.name,
-                "density": round(mineral.density, 8),
-                "feed_grade": _pct(session.feed.overall_grade(index)),
-                "grades": {
-                    product: _pct(result.grade_of(product, index)) for product in products
-                },
-                "recoveries": {
-                    product: _pct(result.recovery_of(product, index)) for product in products
-                },
-                "balance": {
-                    "feed": round(result.feed_mineral[index] * 100.0, 8),
-                    **{
-                        product: round(result.mineral_mass[product][index] * 100.0, 8)
-                        for product in products
-                    },
-                },
-            }
-            for index, mineral in enumerate(session.feed.minerals)
-        ],
+        "minerals": _packed_minerals(session, result, products),
+        "unassigned": _unassigned_solids(session, result, products),
         "sizes": [
             {
                 "label": label,

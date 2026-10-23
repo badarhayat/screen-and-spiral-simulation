@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import tempfile
@@ -14,6 +15,8 @@ from pathlib import Path
 
 from spiral_sim.cli import _parser, should_serve_web
 from spiral_sim.examples import heavy_mineral_sands
+from spiral_sim.report import render
+from spiral_sim.session import session_from_dict
 from spiral_sim.web import example_payload, make_server, rerun_session, run_wizard, static_page_path
 from spiral_sim.workspace_store import (
     WorkspaceError,
@@ -98,6 +101,98 @@ class WizardTests(unittest.TestCase):
         payload["sizes"][0]["d_high"] = 0.10
         with self.assertRaises(ValueError):
             run_wizard(payload)
+
+    def test_entered_feed_grades_stay_after_simulation(self):
+        """A complete grade row below 100% must not be shown as the feed grade.
+
+        The partition still normalizes the assayed minerals so each size class
+        sums to 1. Those proportions are stored and labeled separately.
+        """
+        gold = 0.0001
+        iron = 0.07
+        payload = quartz_ilmenite()
+        payload["minerals"] = [
+            {"name": "Au", "density": 19.3},
+            {"name": "Fe2O3", "density": 5.26},
+        ]
+        payload["overall_grades"] = {"Au": gold, "Fe2O3": iron}
+        snapshot = copy.deepcopy(payload)
+        result = run_wizard(payload)
+        self.assertEqual(payload, snapshot)
+
+        minerals = {item["name"]: item for item in result["minerals"]}
+        self.assertAlmostEqual(minerals["Au"]["feed_grade"], gold, places=8)
+        self.assertAlmostEqual(minerals["Fe2O3"]["feed_grade"], iron, places=8)
+        assayed = gold + iron
+        self.assertAlmostEqual(minerals["Au"]["normalized_proportion"], 100.0 * gold / assayed, places=4)
+        self.assertAlmostEqual(minerals["Fe2O3"]["normalized_proportion"], 100.0 * iron / assayed, places=4)
+        self.assertAlmostEqual(
+            sum(item["normalized_proportion"] for item in result["minerals"]), 100.0, places=4
+        )
+        self.assertNotAlmostEqual(minerals["Au"]["feed_grade"], minerals["Au"]["normalized_proportion"], places=3)
+        self.assertAlmostEqual(sum(result["yields"].values()), 100.0, delta=0.05)
+        self.assertLess(result["closure"], 1e-6)
+        self.assertAlmostEqual(result["unassigned"]["feed"], 100.0 - assayed, places=4)
+        assigned = sum(item["balance"]["feed"] for item in result["minerals"])
+        self.assertAlmostEqual(assigned + result["unassigned"]["feed"], 100.0, places=6)
+        for product, yield_percent in result["yields"].items():
+            mineral_mass = sum(item["balance"][product] for item in result["minerals"])
+            self.assertAlmostEqual(mineral_mass + result["unassigned"][product], yield_percent, places=5)
+        for mineral in result["minerals"]:
+            for product, recovery in mineral["recoveries"].items():
+                from_recovery = (recovery / 100.0) * mineral["feed_grade"]
+                from_grade = mineral["grades"][product] * result["yields"][product] / 100.0
+                self.assertAlmostEqual(from_recovery, from_grade, places=5)
+
+        entered = result["session"]["feed"]["entered_composition_percent"]
+        self.assertEqual(len(entered), len(result["session"]["feed"]["composition"]))
+        for row in entered:
+            self.assertAlmostEqual(row[0], gold, places=8)
+            self.assertAlmostEqual(row[1], iron, places=8)
+        for row in result["session"]["feed"]["composition"]:
+            self.assertAlmostEqual(sum(row), 1.0, places=6)
+            self.assertAlmostEqual(row[0], gold / assayed, places=6)
+        self.assertTrue(
+            any("entered grades are unchanged" in note for note in result["warnings"])
+        )
+
+        again = rerun_session(
+            {"session": result["session"], "splitters": {"outer_opening": 60, "inner_opening": 40}}
+        )
+        again_minerals = {item["name"]: item for item in again["minerals"]}
+        self.assertAlmostEqual(again_minerals["Au"]["feed_grade"], gold, places=8)
+        self.assertAlmostEqual(again_minerals["Fe2O3"]["feed_grade"], iron, places=8)
+        self.assertAlmostEqual(
+            again["session"]["feed"]["entered_composition_percent"][0][0], gold, places=8
+        )
+
+        restored = session_from_dict(result["session"])
+        self.assertAlmostEqual(restored.feed.entered_overall_percent(0), gold, places=8)
+        self.assertAlmostEqual(restored.feed.entered_overall_percent(1), iron, places=8)
+        report = render(restored, restored.run())
+        self.assertIn("0.0001% entered feed grade", report)
+        self.assertIn("0.07% entered feed grade", report)
+        self.assertIn("normalized proportion of the assayed minerals", report)
+        self.assertNotIn("0.14% of feed", report)
+
+        legacy = json.loads(json.dumps(result["session"]))
+        del legacy["feed"]["entered_composition_percent"]
+        old = session_from_dict(legacy)
+        self.assertIsNone(old.feed.entered_composition_percent)
+        self.assertFalse(old.feed.validate())
+
+    def test_remainder_grade_is_not_treated_as_a_rescaled_assay(self):
+        result = run_wizard(quartz_ilmenite())
+        self.assertAlmostEqual(result["minerals"][0]["feed_grade"], 75.0, places=4)
+        self.assertAlmostEqual(result["minerals"][1]["feed_grade"], 25.0, places=4)
+        self.assertNotIn("normalized_proportion", result["minerals"][0])
+        self.assertNotIn("normalized_proportion", result["minerals"][1])
+        self.assertIsNone(result["unassigned"])
+        page = static_page_path().read_text(encoding="utf-8")
+        self.assertIn("Normalized proportion of the assayed minerals", page)
+        self.assertIn("not the entered feed grades", page)
+        self.assertIn("Unassigned solids", page)
+        self.assertIn("entered_composition_percent", page)
 
 
 class LaunchTests(unittest.TestCase):
